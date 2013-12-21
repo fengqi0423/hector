@@ -69,6 +69,17 @@ func GetClassifier(method string) Classifier {
 	return classifier
 }
 
+func GetRegressor(method string) Regressor {
+	rand.Seed( time.Now().UTC().UnixNano())
+
+	var regressor Regressor
+
+	if method == "gp" {
+		regressor = &(GaussianProcess{})
+	}
+	return regressor
+}
+
 func PrepareParams() (string, string, string, string, map[string]string){
 	params := make(map[string]string)
 	train_path := flag.String("train", "train.tsv", "path of training file")
