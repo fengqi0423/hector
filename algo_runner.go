@@ -106,7 +106,7 @@ func AlgorithmRunOnDataSet(classifier Classifier, train_dataset, test_dataset *D
 
 
 /* Regression */
-func RegAlgorithmRun(regressor Regressor, train_path string, test_path string, pred_path string, params map[string]string) (float64, []*LabelPrediction, error) {
+func RegAlgorithmRun(regressor Regressor, train_path string, test_path string, pred_path string, params map[string]string) (float64, []*RealPrediction, error) {
 	global, _ := strconv.ParseInt(params["global"], 10, 64)
 	train_dataset := NewRealDataSet()
 
@@ -149,7 +149,7 @@ func RegAlgorithmTrain(regressor Regressor, train_path string, params map[string
 	return nil
 }
 
-func RegAlgorithmTest(regressor Regressor, test_path string, pred_path string, params map[string]string) (float64, []*LabelPrediction, error) {
+func RegAlgorithmTest(regressor Regressor, test_path string, pred_path string, params map[string]string) (float64, []*RealPrediction, error) {
 	global, _ := strconv.ParseInt(params["global"], 10, 64)
 	
 	model_path, _ := params["model"]
@@ -171,7 +171,7 @@ func RegAlgorithmTest(regressor Regressor, test_path string, pred_path string, p
 	return rmse, predictions, nil
 }
 
-func RegAlgorithmRunOnDataSet(regressor Regressor, train_dataset, test_dataset *RealDataSet, pred_path string, params map[string]string) (float64, []*ValuePrediction) {
+func RegAlgorithmRunOnDataSet(regressor Regressor, train_dataset, test_dataset *RealDataSet, pred_path string, params map[string]string) (float64, []*RealPrediction) {
 	
 	if train_dataset != nil {
 		regressor.Train(train_dataset)
@@ -187,13 +187,13 @@ func RegAlgorithmRunOnDataSet(regressor Regressor, train_dataset, test_dataset *
 		if pred_file != nil{
 			pred_file.WriteString(strconv.FormatFloat(prediction, 'g', 5, 64) + "\n")
 		}
-		predictions = append(predictions, &(RealPrediction{Value: sample.Value, Prediction: prediction}))
+		predictions = append(predictions, &RealPrediction{Value: sample.Value, Prediction: prediction})
 	}
 	if pred_path != ""{
 		defer pred_file.Close()
 	}
 		
-	rmse := RMSE(predictions)
+	rmse := RegRMSE(predictions)
 	return rmse, predictions
 }
 

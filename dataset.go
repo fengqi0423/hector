@@ -236,7 +236,7 @@ func (d *RealDataSet) Load(path string, global_bias_feature_id int64) error {
 		sample := RealSample{Features: []Feature{}, Value: 0.0}
 		for i, tk := range tks {
 			if i == 0 {
-				value, _ := strconv.ParseFloat64(tk, 64)
+				value := ParseFloat64(tk)
 				sample.Value = value
 			} else {
 				kv := strings.Split(tk, ":")

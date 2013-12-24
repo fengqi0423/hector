@@ -124,10 +124,18 @@ type RealSample struct {
 	Value float64
 }
 
-func NewRealSample() {
+func NewRealSample() *RealSample {
 	ret := RealSample{}
 	ret.Features = []Feature{}
 	ret.Value = 0.0
 	ret.Prediction = 0.0
 	return &ret
+}
+
+func (rs *RealSample) GetFeatureVector() *Vector {
+	ret := NewVector()
+	for _, f := range rs.Features {
+		ret.SetValue(f.Id, f.Value)
+	}
+	return ret
 }

@@ -1,8 +1,8 @@
 package hector
 
-import (
-    "strconv"
-    )
+//import (
+//    "strconv"
+//    )
 
 /*
     Given matrix m and vector v, compute inv(m)*v.
@@ -115,14 +115,14 @@ type GaussianProcessParameters struct {
 type GaussianProcess struct {
     Params GaussianProcessParameters
     CovarianceFunc CovFunc
-    CovMatrix = Matrix
+    CovMatrix Matrix
 }
 
-func (self *NeuralNetwork) SaveModel(path string){
+func (self *GaussianProcess) SaveModel(path string){
 
 }
 
-func (self *NeuralNetwork) LoadModel(path string){
+func (self *GaussianProcess) LoadModel(path string){
     
 }
 
@@ -146,13 +146,13 @@ func (algo *GaussianProcess) Init(params map[string]string) {
     */
 }
 
-func (algo *GaussianProcess) Train(dataset * DataSet) {
+func (algo *GaussianProcess) Train(dataset * RealDataSet) {
     /*
     algo.DataSet = dataset
     */
 }
 
-func (algo *GaussianProcess) Predict(sample *Sample) float64 {
+func (algo *GaussianProcess) Predict(sample *RealSample) float64 {
     /*
     z := algo.PredictMultiClass(sample)
     return z.GetValue(1)

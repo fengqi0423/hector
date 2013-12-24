@@ -5,26 +5,14 @@ import (
 	"math"
 )
 
-type Pred struct {
-	Prediction float64
-}
-
 type LabelPrediction struct {
-	Pred
+	Prediction float64
 	Label int
 }
 
-func (lp *LabelPrediction) DoubleValue() float64 {
-	return float64(lp.Label)
-}
-
 type RealPrediction struct { // Real valued
-	Pred
+	Prediction float64
 	Value float64
-}
-
-func (rp *LabelPrediction) DoubleValue() float64 {
-	return rp.Value
 }
 
 type By func(p1, p2 *LabelPrediction) bool
@@ -83,27 +71,40 @@ func AUC(predictions0 []*LabelPrediction) float64 {
 	return (ret - ret2) / (pn * nn)
 }
 
-func RMSE(predictions []*Pred) float64 {
+func RMSE(predictions []*LabelPrediction) float64 {
 	ret := 0.0
 	n := 0.0
 
 	for _, pred := range predictions {
-		ret += (pred.DoubleValue() - pred.Prediction) * (pred.DoubleValue() - pred.Prediction)
+		ret += (float64(pred.Label) - pred.Prediction) * (float64(pred.Label) - pred.Prediction)
 		n += 1.0
 	}
 
 	return math.Sqrt(ret / n)
 }
 
-func ErrorRate(predictions []*Pred) float64 {
+func ErrorRate(predictions []*LabelPrediction) float64 {
 	ret := 0.0
 	n := 0.0
 
 	for _, pred := range predictions {
-		if (pred.DoubleValue() - 0.5) * (pred.Prediction - 0.5) < 0 {
+		if (float64(pred.Label) - 0.5) * (pred.Prediction - 0.5) < 0 {
 			ret += 1.0
 		}
 		n += 1.0
 	}
 	return ret / n
 }
+
+func RegRMSE(predictions []*RealPrediction) float64 {
+	ret := 0.0
+	n := 0.0
+
+	for _, pred := range predictions {
+		ret += (pred.Value - pred.Prediction) * (pred.Value - pred.Prediction)
+		n += 1.0
+	}
+
+	return math.Sqrt(ret / n)
+}
+
