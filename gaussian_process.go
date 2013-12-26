@@ -5,6 +5,30 @@ import (
     "math"
     )
 
+type GaussianProcessParameters struct {
+    Dim int64
+    Theta float64
+}
+
+type GaussianProcess struct {
+    Params GaussianProcessParameters
+    CovarianceFunc CovFunc
+    CovMatrix *Matrix
+    TargetValues *Vector
+    InvCovTarget *Vector // inv(CovMatrix)*TargetValues
+    DataSet *RealDataSet
+    TrainingDataCount int64
+}
+
+func (self *GaussianProcess) SaveModel(path string){
+
+}
+
+func (self *GaussianProcess) LoadModel(path string){
+    
+}
+
+
 /*
     Given matrix m and vector v, compute inv(m)*v.
     Based on Gibbs and MacKay 1997, and Mark N. Gibbs's PhD dissertation 
@@ -17,7 +41,7 @@ import (
     Returns inv(C)*u - So you need the diagonal noise term for covariance matrix in a sense. 
     However, this algorithm is numerically stable, the noise term can be very small and the inversion can still be calculated...
 */
-func ApproximateInversion(A *Matrix, u *Vector, theta float64, dim int64) *Vector {
+func (algo *GaussianProcess) ApproximateInversion(A *Matrix, u *Vector, theta float64, dim int64) *Vector {
     max_itr := 500
     tol := 0.01
 
@@ -109,32 +133,10 @@ func ApproximateInversion(A *Matrix, u *Vector, theta float64, dim int64) *Vecto
     return y_l
 }
 
-type GaussianProcessParameters struct {
-    Dim int64
-}
-
-type GaussianProcess struct {
-    Params GaussianProcessParameters
-    CovarianceFunc CovFunc
-    CovMatrix *Matrix
-    TargetValues *Vector
-    InvCovTarget *Vector // inv(CovMatrix)*TargetValues
-    DataSet *RealDataSet
-    TrainingDataCount int64
-}
-
-func (self *GaussianProcess) SaveModel(path string){
-
-}
-
-func (self *GaussianProcess) LoadModel(path string){
-    
-}
-
 func (algo *GaussianProcess) ExtractTargetValuesAsVector(samples []*RealSample) *Vector {
-    targets = NewVector()
-    for i := int64(0); i < len(samples); i++ {
-        targets.SetValue(i, samples[i].Value)
+    targets := NewVector()
+    for i := 0; i < len(samples); i++ {
+        targets.SetValue(int64(i), samples[i].Value)
     }
     return targets
 }
@@ -159,22 +161,23 @@ func (algo *GaussianProcess) Init(params map[string]string) {
     algo.CovarianceFunc = cf.Cov
 }
 
-func (algo *GaussianProcess) Train(dataset * RealDataSet) {
+func (algo *GaussianProcess) Train(dataset *RealDataSet) {
     algo.DataSet = dataset
-    algo.TrainingDataCount = len(dataset.Samples)
-    algo.CovMatrix = CovMatrix(algo.Dataset.Samples, algo.CovarianceFunc)
-    algo.TargetValues := algo.ExtractTargetValuesAsVector(algo.Dataset.Samples)
-    algo.InvCovTarget := algo.ApproximateInversion(algo.CovMatrix, algo.TargetValues, algo.Params.Theta, algo.TrainingDataCount)
+    algo.TrainingDataCount = int64(len(dataset.Samples))
+    algo.CovMatrix = CovMatrix(algo.DataSet.Samples, algo.CovarianceFunc)
+    algo.TargetValues = algo.ExtractTargetValuesAsVector(algo.DataSet.Samples)
+    algo.InvCovTarget = algo.ApproximateInversion(algo.CovMatrix, algo.TargetValues, algo.Params.Theta, algo.TrainingDataCount)
 }
 
 func (algo *GaussianProcess) Predict(sample *RealSample) float64 {
-    k := CovVector(algo.dataset.Samples, sample, algo.CovarianceFunc)
+    k := CovVector(algo.DataSet.Samples, sample, algo.CovarianceFunc)
     pred := k.Dot(algo.InvCovTarget)
     return pred
 }
 
 
 func (algo *GaussianProcess) PredictStd(sample *RealSample) float64 {
+    k := CovVector(algo.DataSet.Samples, sample, algo.CovarianceFunc)
     C_inv_k := algo.ApproximateInversion(algo.CovMatrix, k, algo.Params.Theta, algo.TrainingDataCount)
     std := math.Sqrt(algo.CovarianceFunc(sample.GetFeatureVector(), sample.GetFeatureVector()) - k.Dot(C_inv_k))
     return std
