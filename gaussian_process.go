@@ -1,8 +1,9 @@
 package hector
 
-//import (
-//    "strconv"
-//    )
+import (
+    "strconv"
+    "math"
+    )
 
 /*
     Given matrix m and vector v, compute inv(m)*v.
@@ -115,7 +116,11 @@ type GaussianProcessParameters struct {
 type GaussianProcess struct {
     Params GaussianProcessParameters
     CovarianceFunc CovFunc
-    CovMatrix Matrix
+    CovMatrix *Matrix
+    TargetValues *Vector
+    InvCovTarget *Vector // inv(CovMatrix)*TargetValues
+    DataSet *RealDataSet
+    TrainingDataCount int64
 }
 
 func (self *GaussianProcess) SaveModel(path string){
@@ -126,12 +131,21 @@ func (self *GaussianProcess) LoadModel(path string){
     
 }
 
+func (algo *GaussianProcess) ExtractTargetValuesAsVector(samples []*RealSample) *Vector {
+    targets = NewVector()
+    for i := int64(0); i < len(samples); i++ {
+        targets.SetValue(i, samples[i].Value)
+    }
+    return targets
+}
+
 func (algo *GaussianProcess) Init(params map[string]string) {
-    /*
+    
     dim, _ := strconv.ParseInt(params["dim"], 10, 64)
 
     algo.Params = GaussianProcessParameters{}
     algo.Params.Dim = dim // Pass in dim as a param.. and require feature space to be continous.
+    algo.Params.Theta = 1e-8 // Used by approximate inversion as the diagonal noise
 
     radius := 0.2
     camp := 40.0
@@ -142,21 +156,28 @@ func (algo *GaussianProcess) Init(params map[string]string) {
     }
     cf.Init(radiuses, camp)
 
-    algo.CovarianceFunc = cf
-    */
+    algo.CovarianceFunc = cf.Cov
 }
 
 func (algo *GaussianProcess) Train(dataset * RealDataSet) {
-    /*
     algo.DataSet = dataset
-    */
+    algo.TrainingDataCount = len(dataset.Samples)
+    algo.CovMatrix = CovMatrix(algo.Dataset.Samples, algo.CovarianceFunc)
+    algo.TargetValues := algo.ExtractTargetValuesAsVector(algo.Dataset.Samples)
+    algo.InvCovTarget := algo.ApproximateInversion(algo.CovMatrix, algo.TargetValues, algo.Params.Theta, algo.TrainingDataCount)
 }
 
 func (algo *GaussianProcess) Predict(sample *RealSample) float64 {
-    /*
-    z := algo.PredictMultiClass(sample)
-    return z.GetValue(1)
-    */
-    return 0.5
+    k := CovVector(algo.dataset.Samples, sample, algo.CovarianceFunc)
+    pred := k.Dot(algo.InvCovTarget)
+    return pred
 }
+
+
+func (algo *GaussianProcess) PredictStd(sample *RealSample) float64 {
+    C_inv_k := algo.ApproximateInversion(algo.CovMatrix, k, algo.Params.Theta, algo.TrainingDataCount)
+    std := math.Sqrt(algo.CovarianceFunc(sample.GetFeatureVector(), sample.GetFeatureVector()) - k.Dot(C_inv_k))
+    return std
+}
+
 

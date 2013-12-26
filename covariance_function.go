@@ -33,11 +33,11 @@ func CovVector(X []*RealSample, y *RealSample, cov_func CovFunc) (*Vector) {
  ARD = auto relevance detection, and here indicates there is a scaling/radius factor per dimension
  */
 type CovSEARD struct {
-    Radiuses Vector // dim -> radius
+    Radiuses *Vector // dim -> radius
     Amp float64
 }
 
-func (cov_func *CovSEARD) Init(radiuses Vector, amp float64) {
+func (cov_func *CovSEARD) Init(radiuses *Vector, amp float64) {
     cov_func.Radiuses = radiuses
     cov_func.Amp = amp
 }
