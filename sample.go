@@ -139,3 +139,7 @@ func (rs *RealSample) GetFeatureVector() *Vector {
 	}
 	return ret
 }
+
+func (s *RealSample) AddFeature(f Feature){
+	s.Features = append(s.Features, f)
+}

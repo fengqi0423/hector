@@ -147,13 +147,13 @@ func (algo *GaussianProcess) Init(params map[string]string) {
 
     algo.Params = GaussianProcessParameters{}
     algo.Params.Dim = dim // Pass in dim as a param.. and require feature space to be continous.
-    algo.Params.Theta = 1e-8 // Used by approximate inversion as the diagonal noise
+    algo.Params.Theta = 1e-7 // Used by approximate inversion as the diagonal noise
 
-    radius := 0.2
+    radius := 0.1
     camp := 40.0
     cf := CovSEARD{}
     radiuses := NewVector()
-    for i := int64(0); i < dim; i++ {
+    for i := int64(1); i <= dim; i++ {
         radiuses.SetValue(i, radius)
     }
     cf.Init(radiuses, camp)
@@ -172,6 +172,7 @@ func (algo *GaussianProcess) Train(dataset *RealDataSet) {
 func (algo *GaussianProcess) Predict(sample *RealSample) float64 {
     k := CovVector(algo.DataSet.Samples, sample, algo.CovarianceFunc)
     pred := k.Dot(algo.InvCovTarget)
+
     return pred
 }
 
