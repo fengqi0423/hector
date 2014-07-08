@@ -32,6 +32,7 @@ type NeuralNetwork struct {
 	Model    TwoLayerWeights
 	MaxLabel int64
 	Params   NeuralNetworkParams
+	TestSet  *core.DataSet
 }
 
 func RandomInitVector(dim int64) *core.Vector {
@@ -62,9 +63,20 @@ func (algo *NeuralNetwork) Init(params map[string]string) {
 	algo.Params.Steps = int(steps)
 	algo.Params.Hidden = int64(hidden)
 	algo.Params.Verbose = int(verbose)
+
+	global, _ := strconv.ParseInt(params["global"], 10, 64)
+	test_dataset := core.NewDataSet()
+	err := test_dataset.Load(params["test_path"], global)
+	if err != nil {
+		test_dataset = nil
+	}
+	algo.TestSet = test_dataset
 }
 
 func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
+	if algo.TestSet == nil {
+		algo.TestSet = dataset
+	}
 	algo.Model = TwoLayerWeights{}
 	algo.Model.L1 = core.NewMatrix()
 	algo.Model.L2 = core.NewMatrix()
@@ -156,7 +168,7 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 		}
 
 		if algo.Params.Verbose > 0 {
-			algo.Evaluate(dataset)
+			algo.Evaluate(algo.TestSet)
 		}
 		algo.Params.LearningRate *= algo.Params.LearningRateDiscount
 	}
