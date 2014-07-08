@@ -196,14 +196,14 @@ func (algo *NeuralNetwork) Evaluate(dataset *core.DataSet) {
 	predictions := []*eval.LabelPrediction{}
 	for _, sample := range dataset.Samples {
 		prediction := algo.PredictMultiClass(sample)
-		label, prob := prediction.KeyWithMaxValue()
+		label, _ := prediction.KeyWithMaxValue()
 		if int(label) == sample.Label {
 			accuracy += 1.0
 		}
 		total += 1.0
-		predictions = append(predictions, &(eval.LabelPrediction{Label: sample.Label, Prediction: prob}))
+		predictions = append(predictions, &(eval.LabelPrediction{Label: sample.Label, Prediction: prediction.GetValue(1)}))
 	}
 	fmt.Printf("accuracy %f%%\n", accuracy/total*100)
 	auc := eval.AUC(predictions)
-	fmt.Printf("AUC %f%%\n", auc)
+	fmt.Printf("AUC of class 1: %f\n", auc)
 }
