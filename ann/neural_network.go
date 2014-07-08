@@ -77,9 +77,6 @@ func (algo *NeuralNetwork) Init(params map[string]string) {
 }
 
 func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
-	if algo.TestSet == nil {
-		algo.TestSet = dataset
-	}
 	algo.Model = TwoLayerWeights{}
 	algo.Model.L1 = core.NewMatrix()
 	algo.Model.L2 = core.NewMatrix()
@@ -174,7 +171,7 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 			}
 		}
 
-		if algo.Params.Verbose > 0 {
+		if algo.Params.Verbose > 0 && algo.TestSet != nil {
 			algo.Evaluate(algo.TestSet)
 		}
 		algo.Params.LearningRate *= algo.Params.LearningRateDiscount
