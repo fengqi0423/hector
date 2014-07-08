@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/xlvector/hector/core"
 	"github.com/xlvector/hector/util"
+	"github.com/xlvector/hector/eval"
 	"math"
 	"math/rand"
 	"strconv"
@@ -192,13 +193,17 @@ func (algo *NeuralNetwork) Predict(sample *core.Sample) float64 {
 func (algo *NeuralNetwork) Evaluate(dataset *core.DataSet) {
 	accuracy := 0.0
 	total := 0.0
+	predictions := []*eval.LabelPrediction{}
 	for _, sample := range dataset.Samples {
 		prediction := algo.PredictMultiClass(sample)
-		label, _ := prediction.KeyWithMaxValue()
+		label, prob := prediction.KeyWithMaxValue()
 		if int(label) == sample.Label {
 			accuracy += 1.0
 		}
 		total += 1.0
+		predictions = append(predictions, &(eval.LabelPrediction{Label: sample.Label, Prediction: prob}))
 	}
 	fmt.Printf("accuracy %f%%\n", accuracy/total*100)
+	auc := eval.AUC(predictions)
+	fmt.Printf("AUC %f%%\n", auc)
 }
