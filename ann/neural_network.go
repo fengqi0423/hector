@@ -17,6 +17,7 @@ type NeuralNetworkParams struct {
 	Hidden               int64
 	Steps                int
 	Verbose              int
+	w1                   float64
 }
 
 type TwoLayerWeights struct {
@@ -56,6 +57,8 @@ func (algo *NeuralNetwork) Init(params map[string]string) {
 	algo.Params.LearningRate, _ = strconv.ParseFloat(params["learning-rate"], 64)
 	algo.Params.LearningRateDiscount, _ = strconv.ParseFloat(params["learning-rate-discount"], 64)
 	algo.Params.Regularization, _ = strconv.ParseFloat(params["regularization"], 64)
+	algo.Params.w1, _ = strconv.ParseFloat(params["w1"], 64)
+
 	steps, _ := strconv.ParseInt(params["steps"], 10, 32)
 	hidden, _ := strconv.ParseInt(params["hidden"], 10, 64)
 	verbose, _ := strconv.ParseInt(params["verbose"], 10, 32)
@@ -119,6 +122,10 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 			y := core.NewVector()
 			z := core.NewVector()
 			e := core.NewVector()
+			class_weight := 1.0
+			if sample.Label == 1 {
+				class_weight = algo.Params.w1
+			}
 			delta_hidden := core.NewVector()
 
 			for i := int64(0); i < algo.Params.Hidden; i++ {
@@ -147,7 +154,7 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 					wij := algo.Model.L2.GetValue(i, j)
 					sig_ij := e.GetValue(j) * (1 - z.GetValue(j)) * z.GetValue(j)
 					delta += sig_ij * wij
-					wij += algo.Params.LearningRate * (y.GetValue(i)*sig_ij - algo.Params.Regularization*wij)
+					wij += class_weight * algo.Params.LearningRate * (y.GetValue(i)*sig_ij - algo.Params.Regularization*wij)
 					algo.Model.L2.SetValue(i, j, wij)
 				}
 				delta_hidden.SetValue(i, delta)
@@ -157,7 +164,7 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 				wi := algo.Model.L1.Data[i]
 				for _, f := range sample.Features {
 					wji := wi.GetValue(f.Id)
-					wji += algo.Params.LearningRate * (delta_hidden.GetValue(i)*f.Value*y.GetValue(i)*(1-y.GetValue(i)) - algo.Params.Regularization*wji)
+					wji += class_weight * algo.Params.LearningRate * (delta_hidden.GetValue(i)*f.Value*y.GetValue(i)*(1-y.GetValue(i)) - algo.Params.Regularization*wji)
 					wi.SetValue(f.Id, wji)
 				}
 			}
