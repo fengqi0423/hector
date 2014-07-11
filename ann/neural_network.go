@@ -95,7 +95,7 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 			_, ok := initalized[f.Id]
 			if !ok {
 				for i := int64(0); i < algo.Params.Hidden; i++ {
-					algo.Model.L1.SetValue(i, f.Id, (rand.Float64()-0.5)/math.Sqrt(float64(algo.Params.Hidden)))
+					algo.Model.L1.SetValue(i, f.Id, rand.NormFloat64()/math.Sqrt(float64(dataset.Dim + 1)))
 				}
 				initalized[f.Id] = 1
 			}
@@ -105,7 +105,7 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 
 	for i := int64(0); i <= algo.Params.Hidden; i++ {
 		for j := int64(0); j <= algo.MaxLabel; j++ {
-			algo.Model.L2.SetValue(i, j, (rand.NormFloat64() / math.Sqrt(float64(algo.MaxLabel)+1.0)))
+			algo.Model.L2.SetValue(i, j, rand.NormFloat64()/math.Sqrt(float64(algo.Params.Hidden + 1)))
 		}
 	}
 
@@ -142,7 +142,11 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 				z.SetValue(i, sum)
 			}
 			z = z.SoftMaxNorm()
-			e.SetValue(int64(sample.Label), 1.0)
+			if dataset.Multilabel <= 1 {
+				e.SetValue(int64(sample.Label), 1.0)
+			} else {
+				e = sample.MultiLabel.Copy()
+			}
 			e.AddVector(z, -1.0)
 
 			for i := int64(0); i <= algo.Params.Hidden; i++ {

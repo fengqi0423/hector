@@ -17,7 +17,9 @@ import (
 
 func MultiClassRun(classifier algo.MultiClassClassifier, train_path string, test_path string, pred_path string, params map[string]string) (float64, error) {
 	global, _ := strconv.ParseInt(params["global"], 10, 64)
+	multilabel, _ := strconv.ParseInt(params["multilabel"], 10, 32)
 	train_dataset := core.NewDataSet()
+	train_dataset.Multilabel = int(multilabel)
 
 	err := train_dataset.Load(train_path, global)
 
@@ -26,6 +28,7 @@ func MultiClassRun(classifier algo.MultiClassClassifier, train_path string, test
 	}
 
 	test_dataset := core.NewDataSet()
+	test_dataset.Multilabel = int(multilabel)
 	err = test_dataset.Load(test_path, global)
 	if err != nil {
 		return 0.5, err
