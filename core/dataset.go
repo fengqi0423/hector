@@ -145,7 +145,7 @@ func (d *DataSet) Load(path string, global_bias_feature_id int64) error {
 	for scanner.Scan() {
 		line := strings.Replace(scanner.Text(), " ", "\t", -1)
 		tks := strings.Split(line, "\t")
-		sample := Sample{Features: []Feature{}, Label: 0}
+		sample := Sample{Features: []Feature{}, Label: 0, MultiLabel: NewVector()}
 
 		for i, tk := range tks {
 			if d.Multilabel <= 0 && i == 0 {
@@ -156,6 +156,9 @@ func (d *DataSet) Load(path string, global_bias_feature_id int64) error {
 				}
 			} else if i < d.Multilabel {
 				label, _ := strconv.Atoi(tk)
+				if i == 0 {
+					sample.Label = label
+				}
 				sample.MultiLabel.SetValue(int64(i), float64(label))				
 			} else {
 				kv := strings.Split(tk, ":")
