@@ -125,6 +125,7 @@ func PrepareParams() (string, string, string, string, map[string]string) {
 	dt_sample_ratio := flag.String("dt-sample-ratio", "1.0", "sampling ratio when split feature in decision tree")
 	dim := flag.String("dim", "1", "input space dimension")
 	w1 := flag.String("w1", "1", "training weight of class 1")
+	dropout := flag.String("dropout", "0", "use dropout algorithm for ann")
 
 	flag.Parse()
 	runtime.GOMAXPROCS(*core)
@@ -163,6 +164,7 @@ func PrepareParams() (string, string, string, string, map[string]string) {
 	params["dt-sample-ratio"] = *dt_sample_ratio
 	params["dim"] = *dim
 	params["w1"] = *w1
+	params["dropout"] = *dropout
 
 	fmt.Println(params)
 	return *train_path, *test_path, *pred_path, *method, params
