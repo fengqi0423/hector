@@ -113,9 +113,7 @@ func (d *RawDataSet) Load(path string) error {
 /* DataSet */
 type DataSet struct {
 	Samples   []*Sample
-	Max_label int
-	Multilabel int
-	Dim int
+	max_label int
 }
 
 func NewDataSet() *DataSet {
@@ -126,8 +124,8 @@ func NewDataSet() *DataSet {
 
 func (d *DataSet) AddSample(sample *Sample) {
 	d.Samples = append(d.Samples, sample)
-	if d.Max_label < sample.Label {
-		d.Max_label = sample.Label
+	if d.max_label < sample.Label {
+		d.max_label = sample.Label
 	}
 }
 
@@ -139,34 +137,23 @@ func (d *DataSet) Load(path string, global_bias_feature_id int64) error {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
-	feature_id_visited := make(map[int64]int)
-	d.Dim = 0
 
 	for scanner.Scan() {
 		line := strings.Replace(scanner.Text(), " ", "\t", -1)
 		tks := strings.Split(line, "\t")
 		sample := Sample{Features: []Feature{}, Label: 0}
-
 		for i, tk := range tks {
-			if d.Multilabel <= 0 && i == 0 {
+			if i == 0 {
 				label, _ := strconv.Atoi(tk)
 				sample.Label = label
-				if d.Max_label < label {
-					d.Max_label = label
+				if d.max_label < label {
+					d.max_label = label
 				}
-			} else if i < d.Multilabel {
-				label, _ := strconv.Atoi(tk)
-				sample.MultiLabel.SetValue(int64(i), float64(label))				
 			} else {
 				kv := strings.Split(tk, ":")
 				feature_id, err := strconv.ParseInt(kv[0], 10, 64)
 				if err != nil {
 					feature_id = util.Hash(kv[0])
-				}
-				_, ok := feature_id_visited[feature_id]
-				if !ok {
-					feature_id_visited[feature_id] = 1
-					d.Dim += 1
 				}
 				feature_value := 1.0
 				if len(kv) > 1 {

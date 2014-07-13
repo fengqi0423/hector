@@ -11,7 +11,6 @@ Here, label should be int value started from 0
 type Sample struct {
 	Features   []Feature
 	Label      int
-	MultiLabel *Vector
 	Prediction float64
 }
 
@@ -19,7 +18,6 @@ func NewSample() *Sample {
 	ret := Sample{}
 	ret.Features = []Feature{}
 	ret.Label = 0
-	ret.MultiLabel = NewVector()
 	ret.Prediction = 0.0
 	return &ret
 }
@@ -27,7 +25,6 @@ func NewSample() *Sample {
 func (s *Sample) Clone() *Sample {
 	ret := NewSample()
 	ret.Label = s.Label
-	ret.MultiLabel = s.MultiLabel.Copy()
 	ret.Prediction = s.Prediction
 	for _, feature := range s.Features {
 		clone_feature := Feature{feature.Id, feature.Value}
