@@ -120,7 +120,7 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 			z := core.NewVector()
 			e := core.NewVector()
 			class_weight := 1.0
-			if sample.Label == 0 {
+			if sample.Label == 1 {
 				class_weight = algo.Params.w1
 			}
 			delta_hidden := core.NewVector()
@@ -146,7 +146,6 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 				e.SetValue(int64(sample.Label), 1.0)
 			} else {
 				e = sample.MultiLabel.Copy()
-				fmt.Printf("%v", e)
 			}
 			e.AddVector(z, -1.0)
 
