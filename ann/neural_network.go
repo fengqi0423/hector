@@ -181,14 +181,14 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 				}
 			}
 
+			done := make(chan int)
 			for i := int64(0); i < algo.Params.Hidden; i++ {
-				wi := algo.Model.L1.Data[i]
-				for _, f := range sample.Features {
-					wji := wi.GetValue(f.Id)
-					wji += class_weight * algo.Params.LearningRate * (delta_hidden.GetValue(i)*f.Value*y.GetValue(i)*(1-y.GetValue(i)) - algo.Params.Regularization*wji)
-					wi.SetValue(f.Id, wji)
-				}
+				go algo.update_weights_to_one_hidden_neuron(i, sample, class_weight, y, delta_hidden, done)
 			}
+			for i:= int64(0); i < algo.Params.Hidden; i++ {
+				<- done
+			}
+
 			counter++
 			if algo.Params.Verbose > 0 && counter%2000 == 0 {
 				fmt.Printf("Epoch %d %f%%\n", step+1, float64(counter)/float64(total)*100)
@@ -204,6 +204,16 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 		algo.Model.L2.Scale(0.5)
 	}
 	fmt.Println()
+}
+
+func (algo *NeuralNetwork) update_weights_to_one_hidden_neuron(i int64, sample *core.Sample, class_weight float64, y *core.Vector, delta_hidden *core.Vector, done chan int){
+	wi := algo.Model.L1.Data[i]
+	for _, f := range sample.Features {
+		wji := wi.GetValue(f.Id)
+		wji += class_weight * algo.Params.LearningRate * (delta_hidden.GetValue(i)*f.Value*y.GetValue(i)*(1-y.GetValue(i)) - algo.Params.Regularization*wji)
+		wi.SetValue(f.Id, wji)
+	}
+	done <- 1
 }
 
 func (algo *NeuralNetwork) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
