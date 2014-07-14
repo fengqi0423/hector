@@ -74,11 +74,14 @@ func (algo *NeuralNetwork) Init(params map[string]string) {
 
 	global, _ := strconv.ParseInt(params["global"], 10, 64)
 	test_dataset := core.NewDataSet()
-	err := test_dataset.Load(params["test_path"], global)
-	if err != nil {
-		test_dataset = nil
+
+	if algo.Params.Verbose == 1 {
+		err := test_dataset.Load(params["validation_path"], global)
+		if err != nil {
+			test_dataset = nil
+		}
+		algo.TestSet = test_dataset
 	}
-	algo.TestSet = test_dataset
 }
 
 func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
