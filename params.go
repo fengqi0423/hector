@@ -92,6 +92,7 @@ func PrepareParams() (string, string, string, string, map[string]string) {
 	params := make(map[string]string)
 	train_path := flag.String("train", "train.tsv", "path of training file")
 	test_path := flag.String("test", "test.tsv", "path of testing file")
+	validation_path := flag.String("validation", "validation.tsv", "some model does online validation, and this is the validaiton data file")
 	pred_path := flag.String("pred", "", "path of pred file")
 	output := flag.String("output", "", "output file path")
 	verbose := flag.Int("v", 0, "verbose output if 1")
@@ -132,7 +133,7 @@ func PrepareParams() (string, string, string, string, map[string]string) {
 	fmt.Println(*train_path)
 	fmt.Println(*test_path)
 	fmt.Println(*method)
-	params["test_path"] = *test_path
+	params["validation_path"] = *validation_path
 	params["verbose"] = strconv.FormatInt(int64(*verbose), 10)
 	params["learning-rate"] = *learning_rate
 	params["learning-rate-discount"] = *learning_rate_discount
