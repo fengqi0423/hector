@@ -15,10 +15,10 @@ type DeepNetParams struct {
 	LearningRate         float64
 	LearningRateDiscount float64
 	Regularization       float64
-	Hidden               []int
-	Classes              int
-	Epoches              int
-	Verbose              int
+	Hidden               []int64
+	Classes              int64
+	Epoches              int64
+	Verbose              int64
 	Dropout_rate_input   float64 // Input layer dropout rate
 	Dropout_rate         float64 // Hidden layer dropout rate
 }
@@ -29,7 +29,7 @@ type DeepNet struct {
 	ValidationSet  *core.DataSet
 }
 
-func RandomInitVector(dim int64) *core.Vector {
+func (algo *DeepNet) RandomInitVector(dim int64) *core.Vector {
 	v := core.NewVector()
 	d := math.Sqrt(float64(dim))
 	var i int64
@@ -39,11 +39,11 @@ func RandomInitVector(dim int64) *core.Vector {
 	return v
 }
 
-func (self *DeepNet) SaveModel(path string) {
+func (algo *DeepNet) SaveModel(path string) {
 
 }
 
-func (self *DeepNet) LoadModel(path string) {
+func (algo *DeepNet) LoadModel(path string) {
 
 }
 
@@ -54,15 +54,15 @@ func (algo *DeepNet) Init(params map[string]string) {
 	algo.Params.Dropout_rate, _         = strconv.ParseFloat(params["dropout-rate"], 64)
 	algo.Params.Dropout_rate_input, _   = strconv.ParseFloat(params["input-dropout-rate"], 64)
 
-	algo.Params.Classes = strconv.ParseInt(params["classes"], 10, 32)
-	algo.Params.Epoches = strconv.ParseInt(params["steps"], 10, 32)
-	algo.Params.Verbose = strconv.ParseInt(params["verbose"], 10, 32)
+	algo.Params.Classes, _ = strconv.ParseInt(params["classes"], 10, 32)
+	algo.Params.Epoches, _ = strconv.ParseInt(params["steps"], 10, 32)
+	algo.Params.Verbose, _ = strconv.ParseInt(params["verbose"], 10, 32)
 
-	var hidden := strings.Split(params["hidden"], ",")
-	algo.Params.Hidden = [len(hidden)]int
-	algo.Weights = [len(hidden)+1]*core.Matrix
+	hidden := strings.Split(params["hidden"], ",")
+	algo.Params.Hidden = make([]int64, len(hidden))
+	algo.Weights = make([]*core.Matrix, len(hidden)+1)
 	for i := range hidden {
-	 	algo.Params.Hidden[i] = strconv.ParseInt(hidden[i], 10, 32)
+	 	algo.Params.Hidden[i], _ = strconv.ParseInt(hidden[i], 10, 32)
 	}
 
 	global_bias, _ := strconv.ParseInt(params["global"], 10, 64)
@@ -95,7 +95,7 @@ func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 	for l := 1; l < len(algo.Weights); l++ {
 		weights = algo.Weights[l]
 		y = core.NewVector()
-		h.SetValue(algo.Params.Hidden, 1) // Offset neuron for hidden layer
+		h.SetValue(algo.Params.Hidden[l-1], 1) // Offset neuron for hidden layer
 
 		if l == len(algo.Weights)-1 {
 			dim = algo.Params.Classes
@@ -114,8 +114,8 @@ func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 	}
 
 	z := core.NewArrayVector()
-	for k, v := range y {
-		z.SetValue(k, v)
+	for k, v := range y.Data {
+		z.SetValue(int(k), v)
 	}
 
 	z = z.SoftMaxNorm()
@@ -125,7 +125,7 @@ func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 
 func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [][]int) []*core.Vector {
 	// Input layer -> first hidden layer
-	ret := [len(algo.Params.Weights)]*core.Vector
+	ret := make([]*core.Vector, len(algo.Weights))
 	h := core.NewVector()
 	weights := algo.Weights[0]
 	in_dropout := dropout[0]
@@ -151,7 +151,7 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 		in_dropout = dropout[l]
 		weights = algo.Weights[l]
 		y = core.NewVector()
-		h.SetValue(algo.Params.Hidden, 1) // Offset neuron for hidden layer
+		h.SetValue(algo.Params.Hidden[l-1], 1) // Offset neuron for hidden layer
 
 		if l == len(algo.Weights)-1 {
 			dim = algo.Params.Classes
@@ -188,7 +188,7 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 	return ret // Contains activities of hidden layers and the final output layer
 }
 
-func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
+func (algo *DeepNet) Train(dataset *core.DataSet) {
 	var weights *core.Matrix
 	var dim int64
 
@@ -196,10 +196,10 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 	algo.Weights[0] = core.NewMatrix()
 	weights = algo.Weights[0]
 	for i := int64(0); i < algo.Params.Hidden[0]; i++ {
-		weights.Data[j] = core.NewVector()
+		weights.Data[i] = core.NewVector()
 	}
 	initalized := make(map[int64]int)
-	max_label := 0
+	max_label := int64(0)
 	for _, sample := range dataset.Samples {
 		for _, f := range sample.Features {
 			_, ok := initalized[f.Id]
@@ -215,16 +215,16 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 		}
 	}
 	// Initialize other layers
-	for l := int64(1); l < len(algo.Weights); l++ {
+	for l := 1; l < len(algo.Weights); l++ {
 		algo.Weights[l] = core.NewMatrix()
 		weights = algo.Weights[l]
 		if l == len(algo.Weights)-1 {
-			dim = algo.Classes
+			dim = algo.Params.Classes
 		} else {
-			dim = algo.Hidden[l]
+			dim = algo.Params.Hidden[l]
 		}
 		for i := int64(0); i < dim; i++ {
-			weights.Data[i] = RandomInitVector(algo.Params.Hidden[l-1] + 1)
+			weights.Data[i] = algo.RandomInitVector(algo.Params.Hidden[l-1] + 1)
 		}
 	}
 
@@ -234,16 +234,16 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 		dropout[i] = make([]int, algo.Params.Hidden[i]+1) // initialized to zero. +1 for the offset
 	}
 
-    L := len(algo.params.Weights)
+    L := len(algo.Weights)
 	total := len(dataset.Samples)
-	for epoch := 0; epoch < algo.Params.Epoches; epoch++ {
+	for epoch := int64(0); epoch < algo.Params.Epoches; epoch++ {
 		if algo.Params.Verbose <= 0 {
 			fmt.Printf(".")
 		}
 		counter := 0
 		for _, sample := range dataset.Samples {
 			if algo.Params.Dropout_rate_input > 0.0 {
-				for i:=0; i<max_label+1; i++{
+				for i:=int64(0); i<max_label+1; i++{
 					dropout[0][i] = rand.Intn(2)
 				}
 			}
@@ -260,14 +260,14 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 
 			// Output layer error signal
 			dy := core.NewVector()
-			y_true := y[L-1].GetValue(sample.Label)
-			dy.SetValue(sample.Label, y_true*(1-y_true))
+			y_true := y[L-1].GetValue(int64(sample.Label))
+			dy.SetValue(int64(sample.Label), y_true*(1-y_true))
 
 			for l := L-1; l > 0 ; l-- { // Weights layer 1 to L-1, no layer 0 yet
 				weights = algo.Weights[l]
 				h  := y[l-1]
 				dh := algo.Params.Hidden[l-1] // Dim of lower hidden layer
-				var dg int                    // Dim of upper hidden layer
+				var dg int64                    // Dim of upper hidden layer
 				if l == L-1 {
 					dg = algo.Params.Classes
 				} else {
@@ -275,16 +275,16 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 				}
 
 				dyy := core.NewVector()
-				for i:=0; i<dh; i++{
+				for i:=int64(0); i<dh; i++{
 					sum := 0.0
-					for j:=0; j<dg; j++{
-						sum += dy.GetValue(j) * weights.GetValue(i, j)
+					for j:=int64(0); j<dg; j++{
+						sum += dy.GetValue(j) * h.GetValue(i) * (1-h.GetValue(i)) * weights.GetValue(i, j)
 					}
 					dyy.SetValue(i, sum)
 				}
 
-				for i:=0; i<dg; i++{
-					for j:=0; j<dh+1; j++{
+				for i:=int64(0); i<dg; i++{
+					for j:=int64(0); j<dh+1; j++{
 						dw := dy.GetValue(i)*h.GetValue(j)
 						w  := weights.GetValue(j, i) + algo.Params.LearningRate*dw
 						weights.SetValue(j, i, w)
@@ -294,8 +294,8 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 			}
 
 			// Weight layer 0 delta
-			weights = algo.Params.Weights[0]
-			for i:=0; i<algo.Params.Hidden[0]; i++{
+			weights = algo.Weights[0]
+			for i:=int64(0); i<algo.Params.Hidden[0]; i++{
 				for _, f := range sample.Features {
 					dw := dy.GetValue(i)*f.Value
 					w  := weights.GetValue(f.Id, i) + algo.Params.LearningRate*dw
@@ -305,7 +305,7 @@ func (algo *NeuralNetwork) Train(dataset *core.DataSet) {
 
 			counter++
 			if algo.Params.Verbose > 0 && counter%2000 == 0 {
-				fmt.Printf("Epoch %d %f%%\n", step+1, float64(counter)/float64(total)*100)
+				fmt.Printf("Epoch %d %f%%\n", epoch+1, float64(counter)/float64(total)*100)
 			}
 		}
 
