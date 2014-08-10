@@ -30,7 +30,7 @@ func GetMutliClassClassifier(method string) algo.MultiClassClassifier {
 	} else if method == "knn" {
 		classifier = &(svm.KNN{})
 	} else if method == "ann" {
-		classifier = &(ann.NeuralNetwork{})
+		classifier = &(ann.DeepNet{})
 	}
 	return classifier
 }
@@ -68,7 +68,7 @@ func GetClassifier(method string) algo.Classifier {
 	} else if method == "knn" {
 		classifier = &(svm.KNN{})
 	} else if method == "ann" {
-		classifier = &(ann.NeuralNetwork{})
+		classifier = &(ann.DeepNet{})
 	} else if method == "lr_owlqn" {
 		classifier = &(lr.LROWLQN{})
 	} else {
@@ -125,8 +125,10 @@ func PrepareParams() (string, string, string, string, map[string]string) {
 	core := flag.Int("core", 1, "core number when run program")
 	dt_sample_ratio := flag.String("dt-sample-ratio", "1.0", "sampling ratio when split feature in decision tree")
 	dim := flag.String("dim", "1", "input space dimension")
-	w1 := flag.String("w1", "1", "training weight of class 1")
-	dropout := flag.String("dropout", "0", "use dropout algorithm for ann")
+	classes := flag.String("classes", "2", "output space dimension")
+	dropout_rate := flag.String("dropout-rate", "0", "hidden layer dropout rate for ann")
+	dropout_rate_input := flag.String("dropout-rate-input", "0", "input layer dropout rate for ann")
+	
 
 	flag.Parse()
 	runtime.GOMAXPROCS(*core)
@@ -164,8 +166,9 @@ func PrepareParams() (string, string, string, string, map[string]string) {
 	params["method"] = *method
 	params["dt-sample-ratio"] = *dt_sample_ratio
 	params["dim"] = *dim
-	params["w1"] = *w1
-	params["dropout"] = *dropout
+	params["classes"] = *classes
+	params["dropout-rate"] = *dropout_rate
+	params["dropout-rate-input"] = *dropout_rate_input
 
 	fmt.Println(params)
 	return *train_path, *test_path, *pred_path, *method, params
