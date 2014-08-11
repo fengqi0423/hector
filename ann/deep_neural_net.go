@@ -84,7 +84,6 @@ func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 	for i:=int64(0); i < algo.Params.Hidden[0]; i++ {
 		sum := float64(0.0)
 		for _, f := range sample.Features {
-//          fmt.Printf("%v,%v %v * %v\n", i, f.Id, f.Value, weights.GetValue(i, f.Id))
 			sum += f.Value * weights.GetValue(i, f.Id)
 		}
 		h.SetValue(i, util.Sigmoid(sum))
@@ -244,7 +243,6 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 		}
 		counter := 0
 		for _, sample := range dataset.Samples {
-//			fmt.Printf("%v\n", algo.Weights[0].GetValue(4, 21))
 			dropout := make([]*core.Vector, L)
 			for i := 0; i < L; i++ {
 				dropout[i] = core.NewVector()
@@ -252,7 +250,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 
 			if algo.Params.Dropout_rate_input > 0.0 {
 				for i:=int64(0); i<max_label+1; i++{
-					if rand.Intn(2) == 1 {
+					if rand.Float64() < algo.Params.Dropout_rate_input {
 						dropout[0].SetValue(i, 1)
 					}
 				}
@@ -261,7 +259,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 			if algo.Params.Dropout_rate > 0.0 {
 				for j:=1; j<L; j++ { 
 					for i := int64(0); i <= algo.Params.Hidden[j-1]; i++ {
-						if rand.Intn(2) == 1 {
+						if rand.Float64() < algo.Params.Dropout_rate {
 							dropout[j].SetValue(i, 1)
 						}
 					}
@@ -272,11 +270,25 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 
 			// Output layer error signal
 			dy := core.NewVector()
-			y_true := y[L-1].GetValue(int64(sample.Label))
-			dy.SetValue(int64(sample.Label), y_true*(1-y_true))
+			for i:=int64(0); i<algo.Params.Classes; i++ {
+				y_true := y[L-1].GetValue(i)
+				if i == int64(sample.Label) {
+					dy.SetValue(i, 1-y_true)
+				} else {
+					dy.SetValue(i, -y_true)					
+				}
+			}
 
+			var dropg *core.Vector // upper layer node dropout
+			var droph *core.Vector // lower layer node dropout
 			for l := L-1; l > 0 ; l-- { // Weights layer 1 to L-1, no layer 0 yet
 				weights = algo.Weights[l]
+				if l == L-1 {
+					dropg = core.NewVector() // No dropout for the output layer
+				} else {
+					droph = dropout[l+1]
+				}
+				droph := dropout[l]
 				h  := y[l-1]
 				dh := algo.Params.Hidden[l-1] // Dim of lower hidden layer
 				var dg int64                    // Dim of upper hidden layer
@@ -289,29 +301,43 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 				dyy := core.NewVector()
 				for i:=int64(0); i<dh; i++{
 					sum := 0.0
-					for j:=int64(0); j<dg; j++{
-						sum += dy.GetValue(j) * h.GetValue(i) * (1-h.GetValue(i)) * weights.GetValue(j, i)
+					if droph.GetValue(i) == 0 {
+						for j:=int64(0); j<dg; j++{
+							if dropg.GetValue(j) == 0 {
+								sum += dy.GetValue(j) * h.GetValue(i) * (1-h.GetValue(i)) * weights.GetValue(j, i)
+							}
+						}
 					}
 					dyy.SetValue(i, sum)
 				}
 
 				for i:=int64(0); i<dg; i++{
-					for j:=int64(0); j<dh+1; j++{
-						dw := dy.GetValue(i)*h.GetValue(j)
-						w  := weights.GetValue(i, j) + algo.Params.LearningRate*dw
-						weights.SetValue(i, j, w)
+					if dropg.GetValue(i) == 0 {
+						for j:=int64(0); j<dh+1; j++{
+							if droph.GetValue(j) == 0 {
+								dw := dy.GetValue(i)*h.GetValue(j)
+								w  := weights.GetValue(i, j) + algo.Params.LearningRate*dw
+								weights.SetValue(i, j, w)
+							}
+						}
 					}
 				}
 				dy = dyy
 			}
 
 			// Weight layer 0 delta
+			dropg = dropout[1]
+			droph = dropout[0]
 			weights = algo.Weights[0]
 			for i:=int64(0); i<algo.Params.Hidden[0]; i++{
-				for _, f := range sample.Features {
-					dw := dy.GetValue(i)*f.Value
-					w  := weights.GetValue(i, f.Id) + algo.Params.LearningRate*dw
-					weights.SetValue(i, f.Id, w)
+				if dropg.GetValue(i) == 0 {
+					for _, f := range sample.Features {
+						if droph.GetValue(f.Id) == 0 {
+							dw := dy.GetValue(i)*f.Value
+							w  := weights.GetValue(i, f.Id) + algo.Params.LearningRate*dw
+							weights.SetValue(i, f.Id, w)
+						}
+					}
 				}
 			}
 
@@ -349,7 +375,6 @@ func (algo *DeepNet) Evaluate(dataset *core.DataSet) {
 	for _, sample := range dataset.Samples {
 		prediction := algo.PredictMultiClass(sample)
 		label, _ := prediction.KeyWithMaxValue()
-//		fmt.Printf("%v\n", prediction.GetValue(1))
 		if int(label) == sample.Label {
 			accuracy += 1.0
 		}
