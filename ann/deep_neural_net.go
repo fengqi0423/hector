@@ -12,15 +12,15 @@ import (
 )
 
 type DeepNetParams struct {
-	LearningRate         float64
-	LearningRateDiscount float64
+	LearningRate         float64 // 0.1
+	LearningRateDiscount float64  // 0.95 0.99
 	Regularization       float64
-	Hidden               []int64
-	Classes              int64
-	Epoches              int64
-	Verbose              int64
-	Dropout_rate_input   float64 // Input layer dropout rate
-	Dropout_rate         float64 // Hidden layer dropout rate
+	Hidden               []int64 // [10,5,3]
+	Classes              int64 // 2
+	Epoches              int64  // Steps
+	Verbose              int64  // 1 0
+	Dropout_rate_input   float64 // Input layer dropout rate 0.3
+	Dropout_rate         float64 // Hidden layer dropout rate 0.5
 }
 
 type DeepNet struct {
@@ -95,7 +95,7 @@ func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 		y = core.NewVector()
 		h.SetValue(algo.Params.Hidden[l-1], 1) // Offset neuron for hidden layer
 
-		for i := int64(0); i <= algo.Params.Hidden[l]; i++ {
+		for i := int64(0); i < algo.Params.Hidden[l]; i++ {
 			sum := float64(0.0)
 			for j := int64(0); j <= algo.Params.Hidden[l-1]; j++ {
 				sum += h.GetValue(j) * weights.GetValue(i, j)
@@ -110,7 +110,7 @@ func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 	y = core.NewVector()
 	h.SetValue(algo.Params.Hidden[l-1], 1) // Offset neuron for hidden layer
 
-	for i := int64(0); i <= algo.Params.Classes; i++ {
+	for i := int64(0); i < algo.Params.Classes; i++ {
 		sum := float64(0.0)
 		for j := int64(0); j <= algo.Params.Hidden[l-1]; j++ {
 			sum += h.GetValue(j) * weights.GetValue(i, j)
@@ -152,12 +152,12 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 	var y *core.Vector
 	for l := 1; l < L-1; l++ {
 		in_dropout = dropout[l]
+		out_dropput = dropout[l+1]
 		weights = algo.Weights[l]
 		y = core.NewVector()
 		h.SetValue(algo.Params.Hidden[l-1], 1) // Offset neuron for hidden layer
 		ret[l-1] = h
-		out_dropput = dropout[l+1]
-		for i := int64(0); i <= algo.Params.Hidden[l]; i++ {
+		for i := int64(0); i < algo.Params.Hidden[l]; i++ {
 			if out_dropput.GetValue(i) == 1 {
 				y.SetValue(i, 0)
 			} else {
@@ -180,7 +180,7 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 	h.SetValue(algo.Params.Hidden[l-1], 1) // Offset neuron for hidden layer
 	ret[l-1] = h
 
-	for i := int64(0); i <= algo.Params.Classes; i++ {
+	for i := int64(0); i < algo.Params.Classes; i++ {
 		sum := float64(0.0)
 		for j := int64(0); j <= algo.Params.Hidden[l-1]; j++ {
 			if in_dropout.GetValue(j) == 0 {
@@ -212,7 +212,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 			_, ok := initalized[f.Id]
 			if !ok {
 				for i := int64(0); i < algo.Params.Hidden[0]; i++ {
-					weights.SetValue(i, f.Id, (rand.Float64()-0.5)/math.Sqrt(float64(algo.Params.Hidden[0])))
+					weights.SetValue(i, f.Id, (rand.Float64()-0.5)/math.Sqrt(float64(algo.Params.Hidden[0]))) // should use input dim
 				}
 				initalized[f.Id] = 1
 				if f.Id > max_label {
@@ -231,7 +231,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 			dim = algo.Params.Hidden[l]
 		}
 		for i := int64(0); i < dim; i++ {
-			weights.Data[i] = algo.RandomInitVector(dim)
+			weights.Data[i] = algo.RandomInitVector(dim)//this should be input layer dim?
 		}
 	}
 
@@ -249,7 +249,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 			}
 
 			if algo.Params.Dropout_rate_input > 0.0 {
-				for i:=int64(0); i<max_label+1; i++{
+				for i:=int64(0); i<=max_label; i++{
 					if rand.Float64() < algo.Params.Dropout_rate_input {
 						dropout[0].SetValue(i, 1)
 					}
@@ -271,11 +271,11 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 			// Output layer error signal
 			dy := core.NewVector()
 			for i:=int64(0); i<algo.Params.Classes; i++ {
-				y_true := y[L-1].GetValue(i)
+				y_hat := y[L-1].GetValue(i)
 				if i == int64(sample.Label) {
-					dy.SetValue(i, 1-y_true)
+					dy.SetValue(i, 1-y_hat)
 				} else {
-					dy.SetValue(i, -y_true)					
+					dy.SetValue(i, -y_hat)					
 				}
 			}
 
@@ -286,7 +286,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 				if l == L-1 {
 					dropg = core.NewVector() // No dropout for the output layer
 				} else {
-					droph = dropout[l+1]
+					dropg = dropout[l+1]
 				}
 				droph := dropout[l]
 				h  := y[l-1]
