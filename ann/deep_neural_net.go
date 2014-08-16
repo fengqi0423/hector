@@ -126,6 +126,20 @@ func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 	return z
 }
 
+func (algo *DeepNet) predict_helper(done chan int, i int64, sample *core.Sample, in_dropout *core.Vector, out_dropput *core.Vector, h *core.Vector, weights *core.Matrix){
+	if out_dropput.GetValue(i) == 1 {
+		h.SetValue(i, 0)
+	} else {
+		sum := float64(0.0)
+		for _, f := range sample.Features {
+			if in_dropout.GetValue(f.Id) == 0 {
+				sum += f.Value * weights.GetValue(i, f.Id)
+			}
+		}
+		h.SetValue(i, util.Sigmoid(sum))
+	}
+	done <- 1
+}
 
 func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout []*core.Vector) []*core.Vector {
 	// Input layer -> first hidden layer
@@ -135,18 +149,12 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 	weights := algo.Weights[0]
 	in_dropout := dropout[0]
 	out_dropput := dropout[1]
+	done := make(chan int)
 	for i:=int64(0); i < algo.Params.Hidden[0]; i++ {
-		if out_dropput.GetValue(i) == 1 {
-			h.SetValue(i, 0)
-		} else {
-			sum := float64(0.0)
-			for _, f := range sample.Features {
-				if in_dropout.GetValue(f.Id) == 0 {
-					sum += f.Value * weights.GetValue(i, f.Id)
-				}
-			}
-			h.SetValue(i, util.Sigmoid(sum))
-		}
+		go algo.predict_helper(done, i, sample, in_dropout, out_dropput, h, weights)
+	}
+	for i:=int64(0); i < algo.Params.Hidden[0]; i++ {
+		<- done
 	}
 
 	var y *core.Vector
@@ -193,6 +201,19 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 	ret[L-1] = y.SoftMaxNorm() // Output layer
 
 	return ret // Contains activities of hidden layers and the final output layer
+}
+
+func (algo *DeepNet) train_helper(done chan int, i int64, dropg *core.Vector, droph *core.Vector, sample *core.Sample, dy *core.Vector, weights *core.Matrix){
+	if dropg.GetValue(i) == 0 {
+		for _, f := range sample.Features {
+			if droph.GetValue(f.Id) == 0 {
+				dw := dy.GetValue(i)*f.Value
+				w  := weights.GetValue(i, f.Id) + algo.Params.LearningRate*dw
+				weights.SetValue(i, f.Id, w)
+			}
+		}
+	}
+	done <- 1
 }
 
 func (algo *DeepNet) Train(dataset *core.DataSet) {
@@ -329,16 +350,12 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 			dropg = dropout[1]
 			droph = dropout[0]
 			weights = algo.Weights[0]
+			done := make(chan int)
 			for i:=int64(0); i<algo.Params.Hidden[0]; i++{
-				if dropg.GetValue(i) == 0 {
-					for _, f := range sample.Features {
-						if droph.GetValue(f.Id) == 0 {
-							dw := dy.GetValue(i)*f.Value
-							w  := weights.GetValue(i, f.Id) + algo.Params.LearningRate*dw
-							weights.SetValue(i, f.Id, w)
-						}
-					}
-				}
+				go algo.train_helper(done, i, dropg, droph, sample, dy, weights)
+			}
+			for i:=int64(0); i<algo.Params.Hidden[0]; i++{
+				<- done
 			}
 
 			counter++
