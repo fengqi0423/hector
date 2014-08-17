@@ -17,6 +17,8 @@ import (
 
 func MultiClassRun(classifier algo.MultiClassClassifier, train_path string, test_path string, pred_path string, params map[string]string) (float64, error) {
 	global, _ := strconv.ParseInt(params["global"], 10, 64)
+	init_model_path, _ := params["init-model"]
+	model_path, _ := params["model"]
 	train_dataset := core.NewDataSet()
 
 	err := train_dataset.Load(train_path, global)
@@ -31,13 +33,22 @@ func MultiClassRun(classifier algo.MultiClassClassifier, train_path string, test
 		return 0.5, err
 	}
 	classifier.Init(params)
+	if init_model_path != ""{
+		classifier.LoadModel(init_model_path)
+	}
 	accuracy := MultiClassRunOnDataSet(classifier, train_dataset, test_dataset, pred_path, params)
 
+	if model_path != "" {
+		classifier.SaveModel(model_path)
+	}
+	
 	return accuracy, nil
 }
 
 func MultiClassTrain(classifier algo.MultiClassClassifier, train_path string, params map[string]string) error {
 	global, _ := strconv.ParseInt(params["global"], 10, 64)
+	init_model_path, _ := params["init-model"]
+	model_path, _ := params["model"]
 	train_dataset := core.NewDataSet()
 
 	err := train_dataset.Load(train_path, global)
@@ -47,9 +58,11 @@ func MultiClassTrain(classifier algo.MultiClassClassifier, train_path string, pa
 	}
 
 	classifier.Init(params)
+	if init_model_path != ""{
+		classifier.LoadModel(init_model_path)
+	}
+	
 	classifier.Train(train_dataset)
-
-	model_path, _ := params["model"]
 
 	if model_path != "" {
 		classifier.SaveModel(model_path)

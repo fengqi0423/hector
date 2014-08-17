@@ -1,6 +1,7 @@
 package ann
 
 import (
+	"os"
 	"fmt"
 	"github.com/xlvector/hector/core"
 	"github.com/xlvector/hector/util"
@@ -9,6 +10,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"bufio"
 )
 
 type DeepNetParams struct {
@@ -17,6 +19,7 @@ type DeepNetParams struct {
 	Regularization       float64
 	Hidden               []int64 // [10,5,3]
 	Classes              int64 // 2
+	InputDim             int64
 	Epoches              int64  // Steps
 	Verbose              int64  // 1 0
 	Dropout_rate_input   float64 // Input layer dropout rate 0.3
@@ -24,8 +27,9 @@ type DeepNetParams struct {
 }
 
 type DeepNet struct {
-	Weights  []*core.Matrix
-	Params   DeepNetParams
+	LoadedModel     bool
+	Weights        []*core.Matrix
+	Params         DeepNetParams
 	ValidationSet  *core.DataSet
 }
 
@@ -39,11 +43,93 @@ func (algo *DeepNet) RandomInitVector(dim int64) *core.Vector {
 }
 
 func (algo *DeepNet) SaveModel(path string) {
-
+	// Saves model architecture hidden neurons + output neurons
+	// And weights
+	sb := util.StringBuilder{}
+	sb.Int64(algo.Params.InputDim)
+	sb.Write("\n")
+	for i:=0;i<len(algo.Params.Hidden);i++{
+		sb.Int64(algo.Params.Hidden[i])
+		if i == len(algo.Params.Hidden)-1 {
+			sb.Write("\n")
+		} else {
+			sb.Write(",")
+		}
+	}
+	sb.Int64(algo.Params.Classes)
+	sb.Write("\n")
+	for i:=0; i<len(algo.Params.Hidden)+1; i++ {
+		weights := algo.Weights[i]
+		var up, down int64
+		if i == len(algo.Params.Hidden) {
+			up = algo.Params.Classes
+		} else {
+			up = algo.Params.Hidden[i]
+		}
+		if i == 0 {
+			down = algo.Params.InputDim
+		} else {
+			down = algo.Params.Hidden[i-1]
+		}
+		for p:=int64(0); p<up; p++{
+			sb.Int64(p)
+			sb.Write(" ")
+			for q:=int64(0); q<down+1; q++{
+				sb.Int64(q)
+				sb.Write(":")
+				sb.Float(weights.GetValue(p, q))
+				sb.Write(" ")
+			}
+			sb.Write("\n")
+		}
+	}
+	sb.WriteToFile(path)
 }
 
 func (algo *DeepNet) LoadModel(path string) {
-
+	file, _ := os.Open(path)
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	// input
+	scanner.Scan()
+	algo.Params.InputDim, _ = strconv.ParseInt(scanner.Text(), 10, 32)
+    // hidden structure
+	scanner.Scan()
+	hidden := strings.Split(scanner.Text(), ",")
+	algo.Params.Hidden = make([]int64, len(hidden))
+	algo.Weights = make([]*core.Matrix, len(hidden)+1)
+	for i := range hidden {
+	 	algo.Params.Hidden[i], _ = strconv.ParseInt(hidden[i], 10, 32)
+	}
+	// output
+	scanner.Scan()
+	algo.Params.Classes, _ = strconv.ParseInt(scanner.Text(), 10, 32)
+	//Weights
+	for i:=0; i<len(algo.Params.Hidden)+1; i++ {
+		algo.Weights[i] = core.NewMatrix()
+		weights := algo.Weights[i]
+		var up, down int64
+		if i == len(algo.Params.Hidden) {
+			up = algo.Params.Classes
+		} else {
+			up = algo.Params.Hidden[i]
+		}
+		if i == 0 {
+			down = algo.Params.InputDim
+		} else {
+			down = algo.Params.Hidden[i-1]
+		}
+		for p:=int64(0); p<up; p++{
+			scanner.Scan()
+			parts := strings.Split(scanner.Text(), " ")
+			for q:=int64(0); q<down+1; q++{
+				u := parts[q+1]
+				v, _ := strconv.ParseFloat(strings.Split(u, ":")[1], 64)
+				weights.SetValue(p, q, v)
+			}
+		}
+	}
+	algo.LoadedModel = true
 }
 
 func (algo *DeepNet) Init(params map[string]string) {
@@ -75,6 +161,7 @@ func (algo *DeepNet) Init(params map[string]string) {
 		}
 		algo.ValidationSet = validation_set
 	}
+	algo.LoadedModel = false
 }
 
 func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
@@ -220,39 +307,42 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 	var weights *core.Matrix
 	var dim int64
 
-	// Initialize the first layer of weights
-	algo.Weights[0] = core.NewMatrix()
-	weights = algo.Weights[0]
-	for i := int64(0); i < algo.Params.Hidden[0]; i++ {
-		weights.Data[i] = core.NewVector()
-	}
-	initalized := make(map[int64]int)
-	max_label := int64(0)
-	for _, sample := range dataset.Samples {
-		for _, f := range sample.Features {
-			_, ok := initalized[f.Id]
-			if !ok {
-				for i := int64(0); i < algo.Params.Hidden[0]; i++ {
-					weights.SetValue(i, f.Id, (rand.Float64()-0.5)/math.Sqrt(float64(algo.Params.Hidden[0]))) // should use input dim
-				}
-				initalized[f.Id] = 1
-				if f.Id > max_label {
-					max_label = f.Id
+	if !algo.LoadedModel {
+		// Initialize the first layer of weights
+		algo.Weights[0] = core.NewMatrix()
+		weights = algo.Weights[0]
+		for i := int64(0); i < algo.Params.Hidden[0]; i++ {
+			weights.Data[i] = core.NewVector()
+		}
+		initalized := make(map[int64]int)
+		max_label := int64(0)
+		for _, sample := range dataset.Samples {
+			for _, f := range sample.Features {
+				_, ok := initalized[f.Id]
+				if !ok {
+					for i := int64(0); i < algo.Params.Hidden[0]; i++ {
+						weights.SetValue(i, f.Id, (rand.Float64()-0.5)/math.Sqrt(float64(algo.Params.Hidden[0]))) // should use input dim
+					}
+					initalized[f.Id] = 1
+					if f.Id > max_label {
+						max_label = f.Id
+					}
 				}
 			}
 		}
-	}
-	// Initialize other layers
-	for l := 1; l < len(algo.Weights); l++ {
-		algo.Weights[l] = core.NewMatrix()
-		weights = algo.Weights[l]
-		if l == len(algo.Weights)-1 {
-			dim = algo.Params.Classes
-		} else {
-			dim = algo.Params.Hidden[l]
-		}
-		for i := int64(0); i < dim; i++ {
-			weights.Data[i] = algo.RandomInitVector(dim)//this should be input layer dim?
+		algo.Params.InputDim = max_label
+		// Initialize other layers
+		for l := 1; l < len(algo.Weights); l++ {
+			algo.Weights[l] = core.NewMatrix()
+			weights = algo.Weights[l]
+			if l == len(algo.Weights)-1 {
+				dim = algo.Params.Classes
+			} else {
+				dim = algo.Params.Hidden[l]
+			}
+			for i := int64(0); i < dim; i++ {
+				weights.Data[i] = algo.RandomInitVector(dim)//this should be input layer dim?
+			}
 		}
 	}
 
@@ -270,7 +360,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 			}
 
 			if algo.Params.Dropout_rate_input > 0.0 {
-				for i:=int64(0); i<=max_label; i++{
+				for i:=int64(0); i<=algo.Params.InputDim; i++{
 					if rand.Float64() < algo.Params.Dropout_rate_input {
 						dropout[0].SetValue(i, 1)
 					}
