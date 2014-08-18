@@ -17,6 +17,7 @@ type DeepNetParams struct {
 	LearningRate         float64 // 0.1
 	LearningRateDiscount float64  // 0.95 0.99
 	Regularization       float64
+	Momentum             float64
 	Hidden               []int64 // [10,5,3]
 	Classes              int64 // 2
 	InputDim             int64
@@ -138,6 +139,7 @@ func (algo *DeepNet) Init(params map[string]string) {
 	algo.Params.Regularization, _       = strconv.ParseFloat(params["regularization"], 64)
 	algo.Params.Dropout_rate, _         = strconv.ParseFloat(params["dropout-rate"], 64)
 	algo.Params.Dropout_rate_input, _   = strconv.ParseFloat(params["input-dropout-rate"], 64)
+	algo.Params.Momentum, _             = strconv.ParseFloat(params["momentum"], 64)
 
 	algo.Params.Classes, _ = strconv.ParseInt(params["classes"], 10, 32)
 	algo.Params.Epoches, _ = strconv.ParseInt(params["steps"], 10, 32)
@@ -285,6 +287,10 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 func (algo *DeepNet) Train(dataset *core.DataSet) {
 	var weights *core.Matrix
 	var dim int64
+	var mv, ft float64 
+	L := len(algo.Weights)
+	total := len(dataset.Samples)
+	pdw := make([]*core.Matrix, L) // previous dw, for momentum
 
 	if !algo.LoadedModel {
 		// Initialize the first layer of weights
@@ -311,10 +317,10 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 		}
 		algo.Params.InputDim = max_label
 		// Initialize other layers
-		for l := 1; l < len(algo.Weights); l++ {
+		for l := 1; l < L; l++ {
 			algo.Weights[l] = core.NewMatrix()
 			weights = algo.Weights[l]
-			if l == len(algo.Weights)-1 {
+			if l == L-1 {
 				dim = algo.Params.Classes
 			} else {
 				dim = algo.Params.Hidden[l]
@@ -325,8 +331,14 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 		}
 	}
 
-    L := len(algo.Weights)
-	total := len(dataset.Samples)
+	if algo.Params.Momentum > 0 {
+		for i:=0; i<L; i++{
+			pdw[i] = core.NewMatrix()
+		}
+		mv = algo.Params.Momentum
+		ft = 1 - algo.Params.Momentum
+	}
+
 	for epoch := int64(0); epoch < algo.Params.Epoches; epoch++ {
 		if algo.Params.Verbose <= 0 {
 			fmt.Printf(".")
@@ -405,8 +417,13 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 					if dropg.GetValue(i) == 0 {
 						for j:=int64(0); j<dh+1; j++{
 							if droph.GetValue(j) == 0 {
-								dw := dy.GetValue(i)*h.GetValue(j)
-								w  := weights.GetValue(i, j) + algo.Params.LearningRate*dw
+								wp := weights.GetValue(i, j)
+								dw := dy.GetValue(i)*h.GetValue(j) - algo.Params.Regularization * wp
+								if algo.Params.Momentum > 0 {
+									dw = pdw[l].GetValue(i, j)*mv + dw*ft
+									pdw[l].SetValue(i, j, dw)
+								}
+								w  := wp + algo.Params.LearningRate*dw
 								weights.SetValue(i, j, w)
 							}
 						}
@@ -423,8 +440,13 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 				if dropg.GetValue(i) == 0 {
 					for _, f := range sample.Features {
 						if droph.GetValue(f.Id) == 0 {
-							dw := dy.GetValue(i)*f.Value
-							w  := weights.GetValue(i, f.Id) + algo.Params.LearningRate*dw
+							wp := weights.GetValue(i, f.Id)
+							dw := dy.GetValue(i)*f.Value - algo.Params.Regularization * wp
+							if algo.Params.Momentum > 0 {
+								dw = pdw[0].GetValue(i, f.Id)*mv + dw*ft
+								pdw[0].SetValue(i, f.Id, dw)
+							}
+							w  := wp + algo.Params.LearningRate*dw
 							weights.SetValue(i, f.Id, w)
 						}
 					}
@@ -446,7 +468,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 		algo.Weights[0].Scale(1-algo.Params.Dropout_rate_input)
 	}
 	if algo.Params.Dropout_rate != 0.0 {
-		for i:=1; i<len(algo.Params.Hidden)+1; i++ {
+		for i:=1; i<L; i++ {
 			algo.Weights[i].Scale(1-algo.Params.Dropout_rate)
 		}
 	}
