@@ -18,6 +18,7 @@ type DeepNetParams struct {
 	LearningRateDiscount float64  // 0.95 0.99
 	Regularization       float64
 	Momentum             float64
+	Batch                int64
 	Hidden               []int64 // [10,5,3]
 	Classes              int64 // 2
 	InputDim             int64
@@ -144,6 +145,7 @@ func (algo *DeepNet) Init(params map[string]string) {
 	algo.Params.Classes, _ = strconv.ParseInt(params["classes"], 10, 32)
 	algo.Params.Epoches, _ = strconv.ParseInt(params["steps"], 10, 32)
 	algo.Params.Verbose, _ = strconv.ParseInt(params["verbose"], 10, 32)
+	algo.Params.Batch  , _ = strconv.ParseInt(params["batch"], 10, 32)
 
 	hidden := strings.Split(params["hidden"], ",")
 	algo.Params.Hidden = make([]int64, len(hidden))
@@ -284,13 +286,104 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 	return ret // Contains activities of hidden layers and the final output layer
 }
 
+func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout []*core.Vector) []*core.Matrix{
+	// Give a batch of samples, return accumulated dw without changing w
+	L := len(algo.Params.Hidden)+1
+	adws := make([]*core.Matrix, L)
+	var weights *core.Matrix
+	var adw *core.Matrix
+	for i := 0; i<L; i++ {
+		adws[i] = core.NewMatrix()
+	}
+	for _, sample := range samples {
+		y := algo.PredictMultiClassWithDropout(sample, dropout)
+
+		// Output layer error signal
+		dy := core.NewVector()
+		for i:=int64(0); i<algo.Params.Classes; i++ {
+			y_hat := y[L-1].GetValue(i)
+			if i == int64(sample.Label) {
+				dy.SetValue(i, 1-y_hat)
+			} else {
+				dy.SetValue(i, -y_hat)					
+			}
+		}
+
+		var dropg *core.Vector // upper layer node dropout
+		var droph *core.Vector // lower layer node dropout
+		for l := L-1; l > 0 ; l-- { // Weights layer 1 to L-1, no layer 0 yet
+			weights = algo.Weights[l]
+			adw = adws[l]
+			if l == L-1 {
+				dropg = core.NewVector() // No dropout for the output layer
+			} else {
+				dropg = dropout[l+1]
+			}
+			droph := dropout[l]
+			h  := y[l-1]
+			dh := algo.Params.Hidden[l-1] // Dim of lower hidden layer
+			var dg int64                    // Dim of upper hidden layer
+			if l == L-1 {
+				dg = algo.Params.Classes
+			} else {
+				dg = algo.Params.Hidden[l]
+			}
+
+			dyy := core.NewVector()
+			for i:=int64(0); i<dh; i++{
+				sum := 0.0
+				if droph.GetValue(i) == 0 {
+					for j:=int64(0); j<dg; j++{
+						if dropg.GetValue(j) == 0 {
+							sum += dy.GetValue(j) * h.GetValue(i) * (1-h.GetValue(i)) * weights.GetValue(j, i)
+						}
+					}
+				}
+				dyy.SetValue(i, sum)
+			}
+
+			for i:=int64(0); i<dg; i++{
+				if dropg.GetValue(i) == 0 {
+					for j:=int64(0); j<dh+1; j++{
+						if droph.GetValue(j) == 0 {
+							dw := dy.GetValue(i)*h.GetValue(j)
+							adw.SetValue(i, j, adw.GetValue(i, j)+dw)
+						}
+					}
+				}
+			}
+			dy = dyy
+		}
+
+		// Weight layer 0 delta
+		dropg = dropout[1]
+		droph = dropout[0]
+		weights = algo.Weights[0]
+		adw = adws[0]
+		for i:=int64(0); i<algo.Params.Hidden[0]; i++{
+			if dropg.GetValue(i) == 0 {
+				for _, f := range sample.Features {
+					if droph.GetValue(f.Id) == 0 {
+						dw := dy.GetValue(i)*f.Value
+						adw.SetValue(i, f.Id, adw.GetValue(i, f.Id)+dw)
+					}
+				}
+			}
+		}
+	}
+	return adws
+}
+
 func (algo *DeepNet) Train(dataset *core.DataSet) {
 	var weights *core.Matrix
+	var dweights *core.Matrix
+	var pdweights *core.Matrix
+	var dWeights []*core.Matrix
 	var dim int64
 	var mv, ft float64 
 	L := len(algo.Weights)
-	total := len(dataset.Samples)
-	pdw := make([]*core.Matrix, L) // previous dw, for momentum
+	total := int64(len(dataset.Samples))
+	previousdWeights := make([]*core.Matrix, L)
 
 	if !algo.LoadedModel {
 		// Initialize the first layer of weights
@@ -333,7 +426,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 
 	if algo.Params.Momentum > 0 {
 		for i:=0; i<L; i++{
-			pdw[i] = core.NewMatrix()
+			previousdWeights[i] = core.NewMatrix()
 		}
 		mv = algo.Params.Momentum
 		ft = 1 - algo.Params.Momentum
@@ -344,7 +437,14 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 			fmt.Printf(".")
 		}
 		counter := 0
-		for _, sample := range dataset.Samples {
+		for i := int64(0); i < total; i += algo.Params.Batch {
+			var samples []*core.Sample
+			if i + algo.Params.Batch <= total {
+				samples = dataset.Samples[i:i+algo.Params.Batch]
+			} else {
+				samples = dataset.Samples[i:total]
+			}
+
 			dropout := make([]*core.Vector, L)
 			for i := 0; i < L; i++ {
 				dropout[i] = core.NewVector()
@@ -368,94 +468,31 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 				}
 			}
 
-			y := algo.PredictMultiClassWithDropout(sample, dropout)
+			dWeights = algo.GetDelta(samples, dropout)
 
-			// Output layer error signal
-			dy := core.NewVector()
-			for i:=int64(0); i<algo.Params.Classes; i++ {
-				y_hat := y[L-1].GetValue(i)
-				if i == int64(sample.Label) {
-					dy.SetValue(i, 1-y_hat)
-				} else {
-					dy.SetValue(i, -y_hat)					
-				}
-			}
-
-			var dropg *core.Vector // upper layer node dropout
-			var droph *core.Vector // lower layer node dropout
-			for l := L-1; l > 0 ; l-- { // Weights layer 1 to L-1, no layer 0 yet
-				weights = algo.Weights[l]
-				if l == L-1 {
-					dropg = core.NewVector() // No dropout for the output layer
-				} else {
-					dropg = dropout[l+1]
-				}
-				droph := dropout[l]
-				h  := y[l-1]
-				dh := algo.Params.Hidden[l-1] // Dim of lower hidden layer
-				var dg int64                    // Dim of upper hidden layer
-				if l == L-1 {
-					dg = algo.Params.Classes
-				} else {
-					dg = algo.Params.Hidden[l]
-				}
-
-				dyy := core.NewVector()
-				for i:=int64(0); i<dh; i++{
-					sum := 0.0
-					if droph.GetValue(i) == 0 {
-						for j:=int64(0); j<dg; j++{
-							if dropg.GetValue(j) == 0 {
-								sum += dy.GetValue(j) * h.GetValue(i) * (1-h.GetValue(i)) * weights.GetValue(j, i)
-							}
+			for i:=0; i<L; i++ {
+				weights   = algo.Weights[i]
+				dweights  = dWeights[i]
+				pdweights = previousdWeights[i]
+				for rid, rv := range weights.Data {
+					for cid, w := range rv.Data {
+						dw  := dweights.GetValue(rid, cid)
+						if algo.Params.Momentum > 0 {
+							pdw := pdweights.GetValue(rid, cid)
+							dw = pdw * mv + dw * ft
 						}
-					}
-					dyy.SetValue(i, sum)
-				}
-
-				for i:=int64(0); i<dg; i++{
-					if dropg.GetValue(i) == 0 {
-						for j:=int64(0); j<dh+1; j++{
-							if droph.GetValue(j) == 0 {
-								wp := weights.GetValue(i, j)
-								dw := dy.GetValue(i)*h.GetValue(j) - algo.Params.Regularization * wp
-								if algo.Params.Momentum > 0 {
-									dw = pdw[l].GetValue(i, j)*mv + dw*ft
-									pdw[l].SetValue(i, j, dw)
-								}
-								w  := wp + algo.Params.LearningRate*dw
-								weights.SetValue(i, j, w)
-							}
-						}
-					}
-				}
-				dy = dyy
-			}
-
-			// Weight layer 0 delta
-			dropg = dropout[1]
-			droph = dropout[0]
-			weights = algo.Weights[0]
-			for i:=int64(0); i<algo.Params.Hidden[0]; i++{
-				if dropg.GetValue(i) == 0 {
-					for _, f := range sample.Features {
-						if droph.GetValue(f.Id) == 0 {
-							wp := weights.GetValue(i, f.Id)
-							dw := dy.GetValue(i)*f.Value - algo.Params.Regularization * wp
-							if algo.Params.Momentum > 0 {
-								dw = pdw[0].GetValue(i, f.Id)*mv + dw*ft
-								pdw[0].SetValue(i, f.Id, dw)
-							}
-							w  := wp + algo.Params.LearningRate*dw
-							weights.SetValue(i, f.Id, w)
-						}
+						w = w + algo.Params.LearningRate * dw - algo.Params.Regularization * w
+						weights.SetValue(rid, cid, w)
 					}
 				}
 			}
 
-			counter++
-			if algo.Params.Verbose > 0 && counter%2000 == 0 {
+			previousdWeights = dWeights
+
+			counter += int(algo.Params.Batch)
+			if algo.Params.Verbose > 0 && counter > 2000 {
 				fmt.Printf("Epoch %d %f%%\n", epoch+1, float64(counter)/float64(total)*100)
+				counter = 0
 			}
 		}
 

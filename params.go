@@ -130,6 +130,7 @@ func PrepareParams() (string, string, string, string, map[string]string) {
 	dropout_rate := flag.String("dropout-rate", "0", "hidden layer dropout rate for ann")
 	dropout_rate_input := flag.String("dropout-rate-input", "0", "input layer dropout rate for ann")
 	momentum := flag.String("momentum", "0", "learning momentum")
+	batch := flag.String("batch-size", "1", "sgd batch size")
 	
 
 	flag.Parse()
@@ -173,6 +174,7 @@ func PrepareParams() (string, string, string, string, map[string]string) {
 	params["dropout-rate"] = *dropout_rate
 	params["dropout-rate-input"] = *dropout_rate_input
 	params["momentum"] = *momentum
+	params["batch"] = *batch
 
 	fmt.Println(params)
 	return *train_path, *test_path, *pred_path, *method, params
