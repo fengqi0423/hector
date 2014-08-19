@@ -379,47 +379,44 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 	var dweights *core.Matrix
 	var pdweights *core.Matrix
 	var dWeights []*core.Matrix
-	var dim int64
+	var in_dim, out_dim int64
 	var mv, ft float64 
 	L := len(algo.Weights)
 	total := int64(len(dataset.Samples))
 	previousdWeights := make([]*core.Matrix, L)
 
 	if !algo.LoadedModel {
-		// Initialize the first layer of weights
+		max_label := int64(0)
+		for _, sample := range dataset.Samples {
+			for _, f := range sample.Features {
+				if f.Id > max_label {
+					max_label = f.Id
+				}
+			}
+		}
+		algo.Params.InputDim = max_label
+		fmt.Printf("Found %d input dimensions.\n", algo.Params.InputDim)
+
 		algo.Weights[0] = core.NewMatrix()
 		weights = algo.Weights[0]
 		for i := int64(0); i < algo.Params.Hidden[0]; i++ {
 			weights.Data[i] = core.NewVector()
 		}
-		initalized := make(map[int64]int)
-		max_label := int64(0)
-		for _, sample := range dataset.Samples {
-			for _, f := range sample.Features {
-				_, ok := initalized[f.Id]
-				if !ok {
-					for i := int64(0); i < algo.Params.Hidden[0]; i++ {
-						weights.SetValue(i, f.Id, (rand.Float64()-0.5)/math.Sqrt(float64(algo.Params.Hidden[0]))) // should use input dim
-					}
-					initalized[f.Id] = 1
-					if f.Id > max_label {
-						max_label = f.Id
-					}
-				}
-			}
-		}
-		algo.Params.InputDim = max_label
-		// Initialize other layers
-		for l := 1; l < L; l++ {
+		for l := 0; l < L; l++ {
 			algo.Weights[l] = core.NewMatrix()
 			weights = algo.Weights[l]
 			if l == L-1 {
-				dim = algo.Params.Classes
+				out_dim = algo.Params.Classes
 			} else {
-				dim = algo.Params.Hidden[l]
+				out_dim = algo.Params.Hidden[l]
 			}
-			for i := int64(0); i < dim; i++ {
-				weights.Data[i] = algo.RandomInitVector(dim)//this should be input layer dim?
+			if l == 0 {
+				in_dim = algo.Params.InputDim
+			} else {
+				in_dim = algo.Params.Hidden[l-1]
+			}
+			for i := int64(0); i < out_dim; i++ {
+				weights.Data[i] = algo.RandomInitVector(in_dim+1)
 			}
 		}
 	}
@@ -430,6 +427,9 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 		}
 		mv = algo.Params.Momentum
 		ft = 1 - algo.Params.Momentum
+	} else {
+		mv = 0
+		ft = 1
 	}
 
 	for epoch := int64(0); epoch < algo.Params.Epoches; epoch++ {
@@ -474,15 +474,26 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 				weights   = algo.Weights[i]
 				dweights  = dWeights[i]
 				pdweights = previousdWeights[i]
-				for rid, rv := range weights.Data {
-					for cid, w := range rv.Data {
-						dw  := dweights.GetValue(rid, cid)
+				if i == L-1 {
+					out_dim = algo.Params.Classes
+				} else {
+					out_dim = algo.Params.Hidden[i]
+				}
+				if i == 0 {
+					in_dim = algo.Params.InputDim
+				} else {
+					in_dim = algo.Params.Hidden[i-1]
+				}
+				for p:=int64(0); p<out_dim; p++ {
+					for q:=int64(0); q<in_dim+1; q++ {
+						w  := weights.GetValue(p, q)
+						dw := dweights.GetValue(p, q)
 						if algo.Params.Momentum > 0 {
-							pdw := pdweights.GetValue(rid, cid)
+							pdw := pdweights.GetValue(p, q)
 							dw = pdw * mv + dw * ft
 						}
 						w = w + algo.Params.LearningRate * dw - algo.Params.Regularization * w
-						weights.SetValue(rid, cid, w)
+						weights.SetValue(p, q, w)
 					}
 				}
 			}
