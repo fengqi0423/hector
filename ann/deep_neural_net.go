@@ -501,9 +501,8 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 			previousdWeights = dWeights
 
 			counter += int(algo.Params.Batch)
-			if algo.Params.Verbose > 0 && counter > 2000 {
+			if algo.Params.Verbose > 0 && counter % (10*int(algo.Params.Batch)) == 0 {
 				fmt.Printf("Epoch %d %f%%\n", epoch+1, float64(counter)/float64(total)*100)
-				counter = 0
 			}
 		}
 
