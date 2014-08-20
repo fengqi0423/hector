@@ -40,7 +40,7 @@ func TestClassifiers(t *testing.T) {
 }
 
 func TestClassifiersOnXOR(t *testing.T) {
-	algos := []string{"ann", "rf", "rdt", "knn"}
+	algos := []string{"ann", "rf", "rdt", "knn", "dnn"}
 
 	params := make(map[string]string)
 	params["steps"] = "30"
@@ -55,6 +55,8 @@ func TestClassifiersOnXOR(t *testing.T) {
 	params["k"] = "10"
 	params["feature-count"] = "1.0"
 	params["dt-sample-ratio"] = "1.0"
+	params["batch"] = "1"
+	params["classes"] = "2"
 
 	for _, algo := range algos {
 		train_dataset := core.XORDataSet(1000)
