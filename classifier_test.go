@@ -57,6 +57,8 @@ func TestClassifiersOnXOR(t *testing.T) {
 	params["dt-sample-ratio"] = "1.0"
 	params["batch"] = "1"
 	params["classes"] = "2"
+	params["dropout-rate"] = "0.5"
+	params["input-dropout-rate"] = "0.05"
 
 	for _, algo := range algos {
 		train_dataset := core.XORDataSet(1000)
