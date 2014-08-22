@@ -181,17 +181,17 @@ func (algo *DeepNet) Init(params map[string]string) {
 
 func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 	// Input layer -> first hidden layer
-	h := core.NewVector()
+	h := core.NewArrayVector()
 	weights := algo.Weights[0]
 	for i:=int64(0); i < algo.Params.Hidden[0]; i++ {
 		sum := float64(0.0)
 		for _, f := range sample.Features {
 			sum += f.Value * weights[i][f.Id]
 		}
-		h.SetValue(i, util.Sigmoid(sum))
+		h.SetValue(int(i), util.Sigmoid(sum))
 	}
 
-	var y *core.Vector
+	var y *core.ArrayVector
 	var dim int64
 	L := len(algo.Weights)
 	for l := 1; l < L; l++ {
@@ -202,26 +202,20 @@ func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 		}
 
 		weights = algo.Weights[l]
-		y = core.NewVector()
-		h.SetValue(algo.Params.Hidden[l-1], 1) // Offset neuron for hidden layer
+		y = core.NewArrayVector()
+		h.SetValue(int(algo.Params.Hidden[l-1]), 1) // Offset neuron for hidden layer
 
 		for i := int64(0); i < dim; i++ {
 			sum := float64(0.0)
 			for j := int64(0); j <= algo.Params.Hidden[l-1]; j++ {
-				sum += h.GetValue(j) * weights[i][j]
+				sum += h.GetValue(int(j)) * weights[i][j]
 			}
-			y.SetValue(i, util.Sigmoid(sum))
+			y.SetValue(int(i), util.Sigmoid(sum))
 		}
 		h = y
 	}
 
-	z := core.NewArrayVector()
-	for k, v := range y.Data {
-		z.SetValue(int(k), v)
-	}
-
-	z = z.SoftMaxNorm()
-	return z
+	return y.SoftMaxNorm()
 }
 
 
