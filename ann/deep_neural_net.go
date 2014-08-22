@@ -14,34 +14,44 @@ import (
 )
 
 type DeepNetParams struct {
-	LearningRate         float64 // 0.1
-	LearningRateDiscount float64  // 0.95 0.99
+	LearningRate         float64
+	LearningRateDiscount float64
 	Regularization       float64
 	Momentum             float64
 	Batch                int64
-	Hidden               []int64 // [10,5,3]
-	Classes              int64 // 2
+	Hidden               []int64
+	Classes              int64
 	InputDim             int64
-	Epoches              int64  // Steps
-	Verbose              int64  // 1 0
-	Dropout_rate_input   float64 // Input layer dropout rate 0.3
-	Dropout_rate         float64 // Hidden layer dropout rate 0.5
+	Epoches              int64
+	Verbose              int64
+	Dropout_rate_input   float64
+	Dropout_rate         float64
 }
 
 type DeepNet struct {
 	LoadedModel     bool
-	Weights        []*core.Matrix
+	Weights        [][][]float64
 	Params         DeepNetParams
 	ValidationSet  *core.DataSet
 }
 
-func (algo *DeepNet) RandomInitVector(dim int64) *core.Vector {
-	v := core.NewVector()
-	d := math.Sqrt(float64(dim))
-	for i := int64(0); i < dim; i++ {
-		v.SetValue(i, (rand.Float64()-0.5)/d)
+func (algo *DeepNet) RandomInitArray(input_dim int64) []float64 {
+	w := make([]float64, input_dim)
+	d := math.Sqrt(float64(input_dim))
+	for i:=int64(0); i < input_dim; i++ {
+		w[i] = (rand.Float64()-0.5)/d
 	}
-	return v
+	return w
+}
+
+func (algo *DeepNet) ScaleWeights(weights [][]float64, scale float64) {
+	d1 := len(weights)
+	d2 := len(weights[0])
+	for i:=0; i<d1; i++{
+		for j:=0; j<d2; j++{
+			weights[i][j] = weights[i][j]*scale		
+		}
+	}
 }
 
 func (algo *DeepNet) SaveModel(path string) {
@@ -79,7 +89,7 @@ func (algo *DeepNet) SaveModel(path string) {
 			for q:=int64(0); q<down+1; q++{
 				sb.Int64(q)
 				sb.Write(":")
-				sb.Float(weights.GetValue(p, q))
+				sb.Float(weights[p][q])
 				sb.Write(" ")
 			}
 			sb.Write("\n")
@@ -99,7 +109,7 @@ func (algo *DeepNet) LoadModel(path string) {
 	scanner.Scan()
 	hidden := strings.Split(scanner.Text(), ",")
 	algo.Params.Hidden = make([]int64, len(hidden))
-	algo.Weights = make([]*core.Matrix, len(hidden)+1)
+	algo.Weights = make([][][]float64, len(hidden)+1)
 	for i := range hidden {
 	 	algo.Params.Hidden[i], _ = strconv.ParseInt(hidden[i], 10, 32)
 	}
@@ -108,8 +118,6 @@ func (algo *DeepNet) LoadModel(path string) {
 	algo.Params.Classes, _ = strconv.ParseInt(scanner.Text(), 10, 32)
 	//Weights
 	for i:=0; i<len(algo.Params.Hidden)+1; i++ {
-		algo.Weights[i] = core.NewMatrix()
-		weights := algo.Weights[i]
 		var up, down int64
 		if i == len(algo.Params.Hidden) {
 			up = algo.Params.Classes
@@ -121,13 +129,16 @@ func (algo *DeepNet) LoadModel(path string) {
 		} else {
 			down = algo.Params.Hidden[i-1]
 		}
+		algo.Weights[i] = make([][]float64, up)
+		weights := algo.Weights[i]
 		for p:=int64(0); p<up; p++{
 			scanner.Scan()
 			parts := strings.Split(scanner.Text(), " ")
+			weights[p] = make([]float64, down+1)
 			for q:=int64(0); q<down+1; q++{
 				u := parts[q+1]
 				v, _ := strconv.ParseFloat(strings.Split(u, ":")[1], 64)
-				weights.SetValue(p, q, v)
+				weights[p][q] = v
 			}
 		}
 	}
@@ -149,7 +160,7 @@ func (algo *DeepNet) Init(params map[string]string) {
 
 	hidden := strings.Split(params["hidden"], ",")
 	algo.Params.Hidden = make([]int64, len(hidden))
-	algo.Weights = make([]*core.Matrix, len(hidden)+1)
+	algo.Weights = make([][][]float64, len(hidden)+1)
 	for i := range hidden {
 	 	algo.Params.Hidden[i], _ = strconv.ParseInt(hidden[i], 10, 32)
 	}
@@ -175,39 +186,35 @@ func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 	for i:=int64(0); i < algo.Params.Hidden[0]; i++ {
 		sum := float64(0.0)
 		for _, f := range sample.Features {
-			sum += f.Value * weights.GetValue(i, f.Id)
+			sum += f.Value * weights[i][f.Id]
 		}
 		h.SetValue(i, util.Sigmoid(sum))
 	}
 
 	var y *core.Vector
-	for l := 1; l < len(algo.Weights)-1; l++ {
+	var dim int64
+	L := len(algo.Weights)
+	for l := 1; l < L; l++ {
+		if l == L-1 {
+			dim = algo.Params.Classes
+		} else {
+			dim = algo.Params.Hidden[l]
+		}
+
 		weights = algo.Weights[l]
 		y = core.NewVector()
 		h.SetValue(algo.Params.Hidden[l-1], 1) // Offset neuron for hidden layer
 
-		for i := int64(0); i < algo.Params.Hidden[l]; i++ {
+		for i := int64(0); i < dim; i++ {
 			sum := float64(0.0)
 			for j := int64(0); j <= algo.Params.Hidden[l-1]; j++ {
-				sum += h.GetValue(j) * weights.GetValue(i, j)
+				sum += h.GetValue(j) * weights[i][j]
 			}
 			y.SetValue(i, util.Sigmoid(sum))
 		}
 		h = y
 	}
 
-	l := len(algo.Weights)-1
-	weights = algo.Weights[l]
-	y = core.NewVector()
-	h.SetValue(algo.Params.Hidden[l-1], 1) // Offset neuron for hidden layer
-
-	for i := int64(0); i < algo.Params.Classes; i++ {
-		sum := float64(0.0)
-		for j := int64(0); j <= algo.Params.Hidden[l-1]; j++ {
-			sum += h.GetValue(j) * weights.GetValue(i, j)
-		}
-		y.SetValue(i, sum)
-	}
 	z := core.NewArrayVector()
 	for k, v := range y.Data {
 		z.SetValue(int(k), v)
@@ -233,7 +240,7 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 			sum := float64(0.0)
 			for _, f := range sample.Features {
 				if in_dropout[f.Id] == 0 {
-					sum += f.Value * weights.GetValue(i, f.Id)
+					sum += f.Value * weights[i][f.Id]
 				}
 			}
 			h.SetValue(i, util.Sigmoid(sum))
@@ -241,21 +248,31 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 	}
 
 	var y *core.Vector
-	for l := 1; l < L-1; l++ {
+	var dim int64
+	for l := 1; l < L; l++ {
 		in_dropout = dropout[l]
-		out_dropput = dropout[l+1]
+		if l == L-1 {
+			out_dropput = make([]int, algo.Params.Classes)
+		} else {
+			out_dropput = dropout[l+1]
+		}
 		weights = algo.Weights[l]
 		y = core.NewVector()
 		h.SetValue(algo.Params.Hidden[l-1], 1) // Offset neuron for hidden layer
 		ret[l-1] = h
-		for i := int64(0); i < algo.Params.Hidden[l]; i++ {
+		if l == L-1 {
+			dim = algo.Params.Classes
+		} else {
+			dim = algo.Params.Hidden[l]
+		}
+		for i := int64(0); i < dim; i++ {
 			if out_dropput[i] == 1 {
 				y.SetValue(i, 0)
 			} else {
 				sum := float64(0.0)
 				for j := int64(0); j <= algo.Params.Hidden[l-1]; j++ {
 					if in_dropout[j] == 0 {
-						sum += h.GetValue(j) * weights.GetValue(i, j)
+						sum += h.GetValue(j) * weights[i][j]
 					}
 				}
 				y.SetValue(i, util.Sigmoid(sum))
@@ -264,36 +281,33 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 		h = y
 	}
 
-	l := L-1
-	in_dropout = dropout[l]
-	weights = algo.Weights[l]
-	y = core.NewVector()
-	h.SetValue(algo.Params.Hidden[l-1], 1) // Offset neuron for hidden layer
-	ret[l-1] = h
-
-	for i := int64(0); i < algo.Params.Classes; i++ {
-		sum := float64(0.0)
-		for j := int64(0); j <= algo.Params.Hidden[l-1]; j++ {
-			if in_dropout[j] == 0 {
-				sum += h.GetValue(j) * weights.GetValue(i, j)
-			}
-		}
-		y.SetValue(i, sum)
-	}
-
 	ret[L-1] = y.SoftMaxNorm() // Output layer
 
 	return ret // Contains activities of hidden layers and the final output layer
 }
 
-func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int) []*core.Matrix{
+func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int) [][][]float64{
 	// Give a batch of samples, return accumulated dw without changing w
 	L := len(algo.Params.Hidden)+1
-	adws := make([]*core.Matrix, L)
-	var weights *core.Matrix
-	var adw *core.Matrix
+	adws := make([][][]float64, L)
+	var weights [][]float64
+	var adw [][]float64
+	var in_dim, out_dim int64
 	for i := 0; i<L; i++ {
-		adws[i] = core.NewMatrix()
+		if i == 0 {
+			in_dim = algo.Params.InputDim
+		} else {
+			in_dim = algo.Params.Hidden[i-1]
+		}
+		if i == L-1 {
+			out_dim = algo.Params.Classes
+		} else {
+			out_dim = algo.Params.Hidden[i]
+		}
+		adws[i] = make([][]float64, out_dim)
+		for j:=int64(0); j<out_dim; j++ {
+			adws[i][j] = make([]float64, in_dim+1)
+		}
 	}
 	for _, sample := range samples {
 		y := algo.PredictMultiClassWithDropout(sample, dropout)
@@ -332,7 +346,7 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int) []*core.M
 				if droph[i] == 0 {
 					for j:=int64(0); j<dg; j++{
 						if dropg[j] == 0 {
-							sum += dy.GetValue(j) * h.GetValue(i) * (1-h.GetValue(i)) * weights.GetValue(j, i)
+							sum += dy.GetValue(j) * h.GetValue(i) * (1-h.GetValue(i)) * weights[j][i]
 						}
 					}
 				}
@@ -344,7 +358,7 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int) []*core.M
 					for j:=int64(0); j<dh+1; j++{
 						if droph[j] == 0 {
 							dw := dy.GetValue(i)*h.GetValue(j)
-							adw.SetValue(i, j, adw.GetValue(i, j)+dw)
+							adw[i][j] = adw[i][j]+dw
 						}
 					}
 				}
@@ -355,14 +369,13 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int) []*core.M
 		// Weight layer 0 delta
 		dropg = dropout[1]
 		droph = dropout[0]
-		weights = algo.Weights[0]
 		adw = adws[0]
 		for i:=int64(0); i<algo.Params.Hidden[0]; i++{
 			if dropg[i] == 0 {
 				for _, f := range sample.Features {
 					if droph[f.Id] == 0 {
 						dw := dy.GetValue(i)*f.Value
-						adw.SetValue(i, f.Id, adw.GetValue(i, f.Id)+dw)
+						adw[i][f.Id] = adw[i][f.Id]+dw
 					}
 				}
 			}
@@ -372,15 +385,15 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int) []*core.M
 }
 
 func (algo *DeepNet) Train(dataset *core.DataSet) {
-	var weights *core.Matrix
-	var dweights *core.Matrix
-	var pdweights *core.Matrix
-	var dWeights []*core.Matrix
+	var weights [][]float64
+	var dweights [][]float64
+	var pdweights [][]float64
+	var dWeights [][][]float64
 	var in_dim, out_dim int64
 	var mv, ft float64 
 	L := len(algo.Weights)
 	total := int64(len(dataset.Samples))
-	previousdWeights := make([]*core.Matrix, L)
+	previousdWeights := make([][][]float64, L)
 
 	if !algo.LoadedModel {
 		max_label := int64(0)
@@ -394,14 +407,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 		algo.Params.InputDim = max_label
 		fmt.Printf("Found %d input dimensions.\n", algo.Params.InputDim)
 
-		algo.Weights[0] = core.NewMatrix()
-		weights = algo.Weights[0]
-		for i := int64(0); i < algo.Params.Hidden[0]; i++ {
-			weights.Data[i] = core.NewVector()
-		}
 		for l := 0; l < L; l++ {
-			algo.Weights[l] = core.NewMatrix()
-			weights = algo.Weights[l]
 			if l == L-1 {
 				out_dim = algo.Params.Classes
 			} else {
@@ -412,16 +418,16 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 			} else {
 				in_dim = algo.Params.Hidden[l-1]
 			}
+			algo.Weights[l] = make([][]float64, out_dim)
+			previousdWeights[l] = make([][]float64, out_dim)
 			for i := int64(0); i < out_dim; i++ {
-				weights.Data[i] = algo.RandomInitVector(in_dim+1)
+				algo.Weights[l][i] = algo.RandomInitArray(in_dim+1)
+				previousdWeights[l][i] = make([]float64, in_dim+1)
 			}
 		}
 	}
 
 	if algo.Params.Momentum > 0 {
-		for i:=0; i<L; i++{
-			previousdWeights[i] = core.NewMatrix()
-		}
 		mv = algo.Params.Momentum
 		ft = 1 - algo.Params.Momentum
 	} else {
@@ -484,14 +490,14 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 				}
 				for p:=int64(0); p<out_dim; p++ {
 					for q:=int64(0); q<in_dim+1; q++ {
-						w  := weights.GetValue(p, q)
-						dw := dweights.GetValue(p, q)
+						w  := weights[p][q]
+						dw := dweights[p][q]
 						if algo.Params.Momentum > 0 {
-							pdw := pdweights.GetValue(p, q)
+							pdw := pdweights[p][q]
 							dw = pdw * mv + dw * ft
 						}
 						w = w + algo.Params.LearningRate * dw - algo.Params.Regularization * w
-						weights.SetValue(p, q, w)
+						weights[p][q] = w
 					}
 				}
 			}
@@ -510,11 +516,11 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 		algo.Params.LearningRate *= algo.Params.LearningRateDiscount
 	}
 	if algo.Params.Dropout_rate_input != 0.0 {
-		algo.Weights[0].Scale(1-algo.Params.Dropout_rate_input)
+		algo.ScaleWeights(algo.Weights[0], (1-algo.Params.Dropout_rate_input))
 	}
 	if algo.Params.Dropout_rate != 0.0 {
 		for i:=1; i<L; i++ {
-			algo.Weights[i].Scale(1-algo.Params.Dropout_rate)
+			algo.ScaleWeights(algo.Weights[i], 1-algo.Params.Dropout_rate)
 		}
 	}
 	fmt.Println()
