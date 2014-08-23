@@ -280,29 +280,12 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 	return ret // Contains activities of hidden layers and the final output layer
 }
 
-func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int) [][][]float64{
+func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int, adws [][][]float64){
 	// Give a batch of samples, return accumulated dw without changing w
 	L := len(algo.Params.Hidden)+1
-	adws := make([][][]float64, L)
 	var weights [][]float64
 	var adw [][]float64
-	var in_dim, out_dim int64
-	for i := 0; i<L; i++ {
-		if i == 0 {
-			in_dim = algo.Params.InputDim
-		} else {
-			in_dim = algo.Params.Hidden[i-1]
-		}
-		if i == L-1 {
-			out_dim = algo.Params.Classes
-		} else {
-			out_dim = algo.Params.Hidden[i]
-		}
-		adws[i] = make([][]float64, out_dim)
-		for j:=int64(0); j<out_dim; j++ {
-			adws[i][j] = make([]float64, in_dim+1)
-		}
-	}
+
 	for _, sample := range samples {
 		y := algo.PredictMultiClassWithDropout(sample, dropout)
 
@@ -375,19 +358,18 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int) [][][]flo
 			}
 		}
 	}
-	return adws
 }
 
 func (algo *DeepNet) Train(dataset *core.DataSet) {
 	var weights [][]float64
 	var dweights [][]float64
 	var pdweights [][]float64
-	var dWeights [][][]float64
 	var in_dim, out_dim int64
 	var mv, ft float64 
 	L := len(algo.Weights)
 	total := int64(len(dataset.Samples))
 	previousdWeights := make([][][]float64, L)
+	dWeights := make([][][]float64, L)
 
 	if !algo.LoadedModel {
 		max_label := int64(0)
@@ -412,15 +394,18 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 			} else {
 				in_dim = algo.Params.Hidden[l-1]
 			}
-			algo.Weights[l] = make([][]float64, out_dim)
+			dWeights[l]         = make([][]float64, out_dim)
+			algo.Weights[l]     = make([][]float64, out_dim)
 			previousdWeights[l] = make([][]float64, out_dim)
 			for i := int64(0); i < out_dim; i++ {
-				algo.Weights[l][i] = algo.RandomInitArray(in_dim+1)
+				dWeights[l][i]         = make([]float64, in_dim+1)
+				algo.Weights[l][i]     = algo.RandomInitArray(in_dim+1)
 				previousdWeights[l][i] = make([]float64, in_dim+1)
 			}
 		}
 	}
 
+	// momentum init
 	if algo.Params.Momentum > 0 {
 		mv = algo.Params.Momentum
 		ft = 1 - algo.Params.Momentum
@@ -429,6 +414,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 		ft = 1
 	}
 
+	//dropout init
 	dropout := make([][]int, L)
 	dropout[0] = make([]int, algo.Params.InputDim+1)
 	for i := 1; i < L; i++ {
@@ -471,7 +457,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 				}
 			}
 
-			dWeights = algo.GetDelta(samples, dropout)
+			algo.GetDelta(samples, dropout, dWeights)
 
 			for i:=0; i<L; i++ {
 				weights   = algo.Weights[i]
@@ -498,12 +484,13 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 							}
 							w = w + algo.Params.LearningRate * dw - algo.Params.Regularization * w
 							weights[p][q] = w
+							pdweights[p][q] = dw
+						} else {
+							pdweights[p][q] = 0
 						}
 					}
 				}
 			}
-
-			previousdWeights = dWeights
 
 			counter += int(algo.Params.Batch)
 			if algo.Params.Verbose > 0 && counter % (10*int(algo.Params.Batch)) == 0 {
