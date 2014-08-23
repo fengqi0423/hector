@@ -276,9 +276,9 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 	return ret // Contains activities of hidden layers and the final output layer
 }
 
-func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int, adws [][][]float64){
+func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int, adws [][][]float64, delta_buffer [][]float64){
 	// Give a batch of samples, return accumulated dw without changing w
-	L := len(algo.Params.Hidden)+1
+	L := len(algo.Weights)
 	var weights [][]float64
 	var adw [][]float64
 
@@ -286,13 +286,12 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int, adws [][]
 		y := algo.PredictMultiClassWithDropout(sample, dropout)
 
 		// Output layer error signal
-		dy := core.NewArrayVector()
 		for i:=0; i<int(algo.Params.Classes); i++ {
 			y_hat := y[L-1].GetValue(i)
 			if i == sample.Label {
-				dy.SetValue(i, 1-y_hat)
+				delta_buffer[L-1][i] = 1-y_hat
 			} else {
-				dy.SetValue(i, -y_hat)					
+				delta_buffer[L-1][i] = -y_hat
 			}
 		}
 
@@ -311,30 +310,30 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int, adws [][]
 			}
 			droph = dropout[l]
 			dropg = dropout[l+1]
-			dyy := core.NewArrayVector()
+			dyh := delta_buffer[l-1]
+			dyg := delta_buffer[l]
 			for i:=0; i<dh; i++{
 				sum := 0.0
 				if droph[i] == 0 {
 					for j:=0; j<dg; j++{
 						if dropg[j] == 0 {
-							sum += dy.GetValue(j) * h.GetValue(i) * (1-h.GetValue(i)) * weights[j][i]
+							sum += dyg[j] * h.GetValue(i) * (1-h.GetValue(i)) * weights[j][i]
 						}
 					}
+					dyh[i] = sum
 				}
-				dyy.SetValue(i, sum)
 			}
 
 			for i:=0; i<dg; i++{
 				if dropg[i] == 0 {
-					for j:=0; j<dh+1; j++{
+					for j:=0; j<=dh; j++{
 						if droph[j] == 0 {
-							dw := dy.GetValue(i)*h.GetValue(j)
+							dw := dyg[i]*h.GetValue(j)
 							adw[i][j] = adw[i][j]+dw
 						}
 					}
 				}
 			}
-			dy = dyy
 		}
 
 		// Weight layer 0 delta
@@ -345,7 +344,7 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int, adws [][]
 			if dropg[i] == 0 {
 				for _, f := range sample.Features {
 					if droph[f.Id] == 0 {
-						dw := dy.GetValue(i)*f.Value
+						dw := delta_buffer[0][i] * f.Value
 						adw[i][f.Id] = adw[i][f.Id]+dw
 					}
 				}
@@ -416,6 +415,13 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 	}
 	dropout[L] = make([]int, algo.Params.Classes)
 
+	//delta buffer for backpropagation
+	delta_buffer := make([][]float64, L)
+	for i := 0; i<L-1; i++ {
+		delta_buffer[i] = make([]float64, algo.Params.Hidden[i])
+	}
+	delta_buffer[L-1] = make([]float64, algo.Params.Classes)
+
 	for epoch := int64(0); epoch < algo.Params.Epoches; epoch++ {
 		if algo.Params.Verbose <= 0 {
 			fmt.Printf(".")
@@ -452,7 +458,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 				}
 			}
 
-			algo.GetDelta(samples, dropout, dWeights)
+			algo.GetDelta(samples, dropout, dWeights, delta_buffer)
 
 			for i:=0; i<L; i++ {
 				weights   = algo.Weights[i]
@@ -469,7 +475,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 					in_dim = algo.Params.Hidden[i-1]
 				}
 				for p:=int64(0); p<out_dim; p++ {
-					for q:=int64(0); q<in_dim+1; q++ {
+					for q:=int64(0); q<=in_dim; q++ {
 						dw := dweights[p][q]
 						if dw != 0 { // Especially for layer 0 - When input is sparse, avoid lots of zero updates
 							w  := weights[p][q]
@@ -480,6 +486,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 							w = w + algo.Params.LearningRate * dw - algo.Params.Regularization * w
 							weights[p][q] = w
 							pdweights[p][q] = dw
+							dweights[p][q] = 0 // clear cache
 						} else {
 							pdweights[p][q] = 0
 						}
