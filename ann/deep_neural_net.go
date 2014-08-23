@@ -245,11 +245,7 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 	var dim int64
 	for l := 1; l < L; l++ {
 		in_dropout = dropout[l]
-		if l == L-1 {
-			out_dropput = make([]int, algo.Params.Classes)
-		} else {
-			out_dropput = dropout[l+1]
-		}
+		out_dropput = dropout[l+1]
 		weights = algo.Weights[l]
 		y = core.NewArrayVector()
 		h.SetValue(int(algo.Params.Hidden[l-1]), 1) // Offset neuron for hidden layer
@@ -309,14 +305,12 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int, adws [][]
 			dh := int(algo.Params.Hidden[l-1]) // Dim of lower hidden layer
 			var dg int                    // Dim of upper hidden layer
 			if l == L-1 {
-				dropg = make([]int, algo.Params.Classes) // No dropout for the output layer
 				dg = int(algo.Params.Classes)
 			} else {
-				dropg = dropout[l+1]
 				dg = int(algo.Params.Hidden[l])
 			}
-			droph := dropout[l]
-
+			droph = dropout[l]
+			dropg = dropout[l+1]
 			dyy := core.NewArrayVector()
 			for i:=0; i<dh; i++{
 				sum := 0.0
@@ -415,11 +409,12 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 	}
 
 	//dropout init
-	dropout := make([][]int, L)
+	dropout := make([][]int, L+1)
 	dropout[0] = make([]int, algo.Params.InputDim+1)
 	for i := 1; i < L; i++ {
 		dropout[i] = make([]int, algo.Params.Hidden[i-1]+1)
 	}
+	dropout[L] = make([]int, algo.Params.Classes)
 
 	for epoch := int64(0); epoch < algo.Params.Epoches; epoch++ {
 		if algo.Params.Verbose <= 0 {
