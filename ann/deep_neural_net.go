@@ -219,15 +219,15 @@ func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 }
 
 
-func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [][]int) []*core.Vector {
+func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [][]int) []*core.ArrayVector {
 	// Input layer -> first hidden layer
 	L := len(algo.Weights)
-	ret := make([]*core.Vector, L)
-	h := core.NewVector()
+	ret := make([]*core.ArrayVector, L)
+	h := core.NewArrayVector()
 	weights := algo.Weights[0]
 	in_dropout := dropout[0]
 	out_dropput := dropout[1]
-	for i:=int64(0); i < algo.Params.Hidden[0]; i++ {
+	for i:=0; i < int(algo.Params.Hidden[0]); i++ {
 		if out_dropput[i] == 1 {
 			h.SetValue(i, 0)
 		} else {
@@ -241,7 +241,7 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 		}
 	}
 
-	var y *core.Vector
+	var y *core.ArrayVector
 	var dim int64
 	for l := 1; l < L; l++ {
 		in_dropout = dropout[l]
@@ -251,20 +251,20 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 			out_dropput = dropout[l+1]
 		}
 		weights = algo.Weights[l]
-		y = core.NewVector()
-		h.SetValue(algo.Params.Hidden[l-1], 1) // Offset neuron for hidden layer
+		y = core.NewArrayVector()
+		h.SetValue(int(algo.Params.Hidden[l-1]), 1) // Offset neuron for hidden layer
 		ret[l-1] = h
 		if l == L-1 {
 			dim = algo.Params.Classes
 		} else {
 			dim = algo.Params.Hidden[l]
 		}
-		for i := int64(0); i < dim; i++ {
+		for i := 0; i < int(dim); i++ {
 			if out_dropput[i] == 1 {
 				y.SetValue(i, 0)
 			} else {
 				sum := float64(0.0)
-				for j := int64(0); j <= algo.Params.Hidden[l-1]; j++ {
+				for j := 0; j <= int(algo.Params.Hidden[l-1]); j++ {
 					if in_dropout[j] == 0 {
 						sum += h.GetValue(j) * weights[i][j]
 					}
@@ -307,10 +307,10 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int) [][][]flo
 		y := algo.PredictMultiClassWithDropout(sample, dropout)
 
 		// Output layer error signal
-		dy := core.NewVector()
-		for i:=int64(0); i<algo.Params.Classes; i++ {
+		dy := core.NewArrayVector()
+		for i:=0; i<int(algo.Params.Classes); i++ {
 			y_hat := y[L-1].GetValue(i)
-			if i == int64(sample.Label) {
+			if i == sample.Label {
 				dy.SetValue(i, 1-y_hat)
 			} else {
 				dy.SetValue(i, -y_hat)					
@@ -323,22 +323,22 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int) [][][]flo
 			weights = algo.Weights[l]
 			adw = adws[l]
 			h  := y[l-1]
-			dh := algo.Params.Hidden[l-1] // Dim of lower hidden layer
-			var dg int64                    // Dim of upper hidden layer
+			dh := int(algo.Params.Hidden[l-1]) // Dim of lower hidden layer
+			var dg int                    // Dim of upper hidden layer
 			if l == L-1 {
 				dropg = make([]int, algo.Params.Classes) // No dropout for the output layer
-				dg = algo.Params.Classes
+				dg = int(algo.Params.Classes)
 			} else {
 				dropg = dropout[l+1]
-				dg = algo.Params.Hidden[l]
+				dg = int(algo.Params.Hidden[l])
 			}
 			droph := dropout[l]
 
-			dyy := core.NewVector()
-			for i:=int64(0); i<dh; i++{
+			dyy := core.NewArrayVector()
+			for i:=0; i<dh; i++{
 				sum := 0.0
 				if droph[i] == 0 {
-					for j:=int64(0); j<dg; j++{
+					for j:=0; j<dg; j++{
 						if dropg[j] == 0 {
 							sum += dy.GetValue(j) * h.GetValue(i) * (1-h.GetValue(i)) * weights[j][i]
 						}
@@ -347,9 +347,9 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int) [][][]flo
 				dyy.SetValue(i, sum)
 			}
 
-			for i:=int64(0); i<dg; i++{
+			for i:=0; i<dg; i++{
 				if dropg[i] == 0 {
-					for j:=int64(0); j<dh+1; j++{
+					for j:=0; j<dh+1; j++{
 						if droph[j] == 0 {
 							dw := dy.GetValue(i)*h.GetValue(j)
 							adw[i][j] = adw[i][j]+dw
@@ -364,7 +364,7 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int) [][][]flo
 		dropg = dropout[1]
 		droph = dropout[0]
 		adw = adws[0]
-		for i:=int64(0); i<algo.Params.Hidden[0]; i++{
+		for i:=0; i<int(algo.Params.Hidden[0]); i++{
 			if dropg[i] == 0 {
 				for _, f := range sample.Features {
 					if droph[f.Id] == 0 {
