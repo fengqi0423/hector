@@ -429,6 +429,12 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 		ft = 1
 	}
 
+	dropout := make([][]int, L)
+	dropout[0] = make([]int, algo.Params.InputDim+1)
+	for i := 1; i < L; i++ {
+		dropout[i] = make([]int, algo.Params.Hidden[i-1]+1)
+	}
+
 	for epoch := int64(0); epoch < algo.Params.Epoches; epoch++ {
 		if algo.Params.Verbose <= 0 {
 			fmt.Printf(".")
@@ -442,16 +448,13 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 				samples = dataset.Samples[i:total]
 			}
 
-			dropout := make([][]int, L)
-			dropout[0] = make([]int, algo.Params.InputDim+1)
-			for i := 1; i < L; i++ {
-				dropout[i] = make([]int, algo.Params.Hidden[i-1]+1)
-			}
 
 			if algo.Params.Dropout_rate_input > 0.0 {
 				for i:=int64(0); i<=algo.Params.InputDim; i++{
 					if rand.Float64() < algo.Params.Dropout_rate_input {
 						dropout[0][i] = 1
+					} else {
+						dropout[0][i] = 0
 					}
 				}
 			}
@@ -461,6 +464,8 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 					for i := int64(0); i <= algo.Params.Hidden[j-1]; i++ {
 						if rand.Float64() < algo.Params.Dropout_rate {
 							dropout[j][i] = 1
+						} else {
+							dropout[j][i] = 0
 						}
 					}
 				}
@@ -484,14 +489,16 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 				}
 				for p:=int64(0); p<out_dim; p++ {
 					for q:=int64(0); q<in_dim+1; q++ {
-						w  := weights[p][q]
 						dw := dweights[p][q]
-						if algo.Params.Momentum > 0 {
-							pdw := pdweights[p][q]
-							dw = pdw * mv + dw * ft
+						if dw != 0 { // Especially for layer 0 - When input is sparse, avoid lots of zero updates
+							w  := weights[p][q]
+							if algo.Params.Momentum > 0 {
+								pdw := pdweights[p][q]
+								dw = pdw * mv + dw * ft
+							}
+							w = w + algo.Params.LearningRate * dw - algo.Params.Regularization * w
+							weights[p][q] = w
 						}
-						w = w + algo.Params.LearningRate * dw - algo.Params.Regularization * w
-						weights[p][q] = w
 					}
 				}
 			}
