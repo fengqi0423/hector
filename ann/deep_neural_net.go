@@ -281,7 +281,7 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 	}
 }
 
-func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int, adws [][][]float64, signal [][]float64, activities [][]float64, feature_ids map[int64]int){
+func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int, adws [][][]float64, signal [][]float64, activities [][]float64){
 	// Give a batch of samples, return accumulated dw without changing w
 	L := len(algo.Weights)
 	var weights [][]float64
@@ -349,15 +349,9 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int, adws [][]
 			if dropg[i] == 0 {
 				for _, f := range sample.Features {
 					if droph[f.Id] == 0 {
-						feature_ids[f.Id] = 1
 						dw := signal[0][i] * f.Value
 						adw[i][f.Id] = adw[i][f.Id]+dw
 					}
-				}
-				if droph[algo.Params.InputDim] == 0 {
-					feature_ids[algo.Params.InputDim] = 1
-					dw := signal[0][i]
-					adw[i][algo.Params.InputDim] = adw[i][algo.Params.InputDim]+dw
 				}
 			}
 		}
@@ -436,9 +430,6 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 	signal[L-1]     = make([]float64, algo.Params.Classes)
 	activities[L-1] = make([]float64, algo.Params.Classes)
 
-	// store which features are used in each update
-	feature_ids := make(map[int64]int, algo.Params.InputDim+1)
-
 	for epoch := int64(0); epoch < algo.Params.Epoches; epoch++ {
 		if algo.Params.Verbose <= 0 {
 			fmt.Printf(".")
@@ -475,30 +466,9 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 				}
 			}
 
-			algo.GetDelta(samples, dropout, dWeights, signal, activities, feature_ids)
+			algo.GetDelta(samples, dropout, dWeights, signal, activities)
 
-			weights   = algo.Weights[0]
-			dweights  = dWeights[0]
-			pdweights = previousdWeights[0]
-			for p:=int64(0); p<algo.Params.Hidden[0]; p++ {
-				for q, _ := range feature_ids {
-					dw := dweights[p][q]
-					w  := weights[p][q]
-					if algo.Params.Momentum > 0 {
-						pdw := pdweights[p][q]
-						dw = pdw * mv + dw * ft
-					}
-					w = w + algo.Params.LearningRate * dw - algo.Params.Regularization * w
-					weights[p][q] = w
-					pdweights[p][q] = dw
-
-					// clear cache
-					dweights[p][q] = 0 
-					feature_ids[q] = 0
-				}
-			}
-
-			for i:=1; i<L; i++ {
+			for i:=0; i<L; i++ {
 				weights   = algo.Weights[i]
 				dweights  = dWeights[i]
 				pdweights = previousdWeights[i]
@@ -507,7 +477,11 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 				} else {
 					out_dim = algo.Params.Hidden[i]
 				}
-				in_dim = algo.Params.Hidden[i-1]
+				if i == 0 {
+					in_dim = algo.Params.InputDim
+				} else {
+					in_dim = algo.Params.Hidden[i-1]
+				}
 				for p:=int64(0); p<out_dim; p++ {
 					for q:=int64(0); q<=in_dim; q++ {
 						dw := dweights[p][q]
@@ -526,7 +500,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 						}
 					}
 				}
-			}			
+			}
 
 			counter += int(algo.Params.Batch)
 			if algo.Params.Verbose > 0 && counter % (10*int(algo.Params.Batch)) == 0 {
