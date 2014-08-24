@@ -50,7 +50,7 @@ func main() {
 		train, test := SplitFile(dataset, total, part)
 		classifier := hector.GetMutliClassClassifier(method)
 		classifier.Init(params)
-		accuracy := hector.MultiClassRunOnDataSet(classifier, train, test, "", params)
+		accuracy := hector.MultiClassRunOnDataSet(classifier, train, test, "", -1, params)
 		fmt.Println("accuracy : ", accuracy)
 		average_accuracy += accuracy
 		classifier = nil

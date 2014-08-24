@@ -134,6 +134,7 @@ func PrepareParams() (string, string, string, string, map[string]string) {
 	dropout_rate := flag.String("dropout-rate", "0", "hidden layer dropout rate for ann")
 	dropout_rate_input := flag.String("dropout-rate-input", "0", "input layer dropout rate for ann")
 	momentum := flag.String("momentum", "0", "learning momentum")
+	prob_of_class := flag.String("prob-of-class", "-1", "probability of which class should be output, instead of the winning class")
 	
 
 	flag.Parse()
@@ -177,6 +178,7 @@ func PrepareParams() (string, string, string, string, map[string]string) {
 	params["dropout-rate"] = *dropout_rate
 	params["dropout-rate-input"] = *dropout_rate_input
 	params["momentum"] = *momentum
+	params["prob-of-class"] = *prob_of_class
 
 	fmt.Println(params)
 	return *train_path, *test_path, *pred_path, *method, params

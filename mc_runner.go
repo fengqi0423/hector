@@ -17,6 +17,7 @@ import (
 
 func MultiClassRun(classifier algo.MultiClassClassifier, train_path string, test_path string, pred_path string, params map[string]string) (float64, error) {
 	global, _ := strconv.ParseInt(params["global"], 10, 64)
+	prob_of_class, _ := strconv.ParseInt(params["prob-of-class"], 10, 64)
 	init_model_path, _ := params["init-model"]
 	model_path, _ := params["model"]
 	train_dataset := core.NewDataSet()
@@ -36,7 +37,7 @@ func MultiClassRun(classifier algo.MultiClassClassifier, train_path string, test
 	if init_model_path != ""{
 		classifier.LoadModel(init_model_path)
 	}
-	accuracy := MultiClassRunOnDataSet(classifier, train_dataset, test_dataset, pred_path, params)
+	accuracy := MultiClassRunOnDataSet(classifier, train_dataset, test_dataset, pred_path, prob_of_class, params)
 
 	if model_path != "" {
 		classifier.SaveModel(model_path)
@@ -73,6 +74,7 @@ func MultiClassTrain(classifier algo.MultiClassClassifier, train_path string, pa
 
 func MultiClassTest(classifier algo.MultiClassClassifier, test_path string, pred_path string, params map[string]string) (float64, error) {
 	global, _ := strconv.ParseInt(params["global"], 10, 64)
+	prob_of_class, _ := strconv.ParseInt(params["prob-of-class"], 10, 64)
 
 	model_path, _ := params["model"]
 	classifier.Init(params)
@@ -88,12 +90,12 @@ func MultiClassTest(classifier algo.MultiClassClassifier, test_path string, pred
 		return 0.0, err
 	}
 
-	accuracy := MultiClassRunOnDataSet(classifier, nil, test_dataset, pred_path, params)
+	accuracy := MultiClassRunOnDataSet(classifier, nil, test_dataset, pred_path, prob_of_class, params)
 
 	return accuracy, nil
 }
 
-func MultiClassRunOnDataSet(classifier algo.MultiClassClassifier, train_dataset, test_dataset *core.DataSet, pred_path string, params map[string]string) float64 {
+func MultiClassRunOnDataSet(classifier algo.MultiClassClassifier, train_dataset, test_dataset *core.DataSet, pred_path string, prob_of_class int64, params map[string]string) float64 {
 
 	if train_dataset != nil {
 		classifier.Train(train_dataset)
@@ -113,7 +115,11 @@ func MultiClassRunOnDataSet(classifier algo.MultiClassClassifier, train_dataset,
 		}
 		total += 1.0
 		if pred_file != nil {
-			pred_file.WriteString(strconv.Itoa(label) + "\n")
+			if prob_of_class >= 0 {
+				pred_file.WriteString(strconv.FormatFloat(prediction.GetValue(int(prob_of_class)), 'g', 5, 64) + "\n")
+			} else {
+				pred_file.WriteString(strconv.Itoa(label) + "\n")
+			}
 		}
 	}
 	if pred_path != "" {
