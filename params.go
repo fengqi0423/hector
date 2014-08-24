@@ -29,8 +29,10 @@ func GetMutliClassClassifier(method string) algo.MultiClassClassifier {
 		classifier = &(dt.RandomDecisionTree{})
 	} else if method == "knn" {
 		classifier = &(svm.KNN{})
-	} else if method == "ann" {
+	} else if method == "dnn" {
 		classifier = &(ann.DeepNet{})
+	} else if method == "ann" {
+		classifier = &(ann.NeuralNetwork{})
 	}
 	return classifier
 }
@@ -68,6 +70,8 @@ func GetClassifier(method string) algo.Classifier {
 	} else if method == "knn" {
 		classifier = &(svm.KNN{})
 	} else if method == "ann" {
+		classifier = &(ann.NeuralNetwork{})
+	} else if method == "dnn" {
 		classifier = &(ann.DeepNet{})
 	} else if method == "lr_owlqn" {
 		classifier = &(lr.LROWLQN{})

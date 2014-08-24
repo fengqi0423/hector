@@ -40,21 +40,24 @@ func TestClassifiers(t *testing.T) {
 }
 
 func TestClassifiersOnXOR(t *testing.T) {
-	algos := []string{"ann", "rf", "rdt", "knn"}
+	algos := []string{"rf", "rdt", "knn", "dnn"}
 
 	params := make(map[string]string)
 	params["steps"] = "30"
 	params["max-depth"] = "10"
 	params["min-leaf-size"] = "10"
 	params["tree-count"] = "100"
-	params["learning-rate"] = "0.1"
+	params["learning-rate"] = "0.5"
 	params["learning-rate-discount"] = "1.0"
 	params["regularization"] = "0.0001"
 	params["gini"] = "1.0"
-	params["hidden"] = "15"
+	params["hidden"] = "4,10"
 	params["k"] = "10"
 	params["feature-count"] = "1.0"
 	params["dt-sample-ratio"] = "1.0"
+	params["classes"] = "2"
+	params["dropout-rate"] = "0.5"
+	params["dropout-rate-input"] = "0.3"
 
 	for _, algo := range algos {
 		train_dataset := core.XORDataSet(1000)
