@@ -436,9 +436,6 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 	signal[L-1]     = make([]float64, algo.Params.Classes)
 	activities[L-1] = make([]float64, algo.Params.Classes)
 
-	// store which features are used in each update
-	feature_ids := make(map[int64]int, algo.Params.InputDim+1)
-
 	for epoch := int64(0); epoch < algo.Params.Epoches; epoch++ {
 		if algo.Params.Verbose <= 0 {
 			fmt.Printf(".")
@@ -475,6 +472,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 				}
 			}
 
+			feature_ids := make(map[int64]int)
 			algo.GetDelta(samples, dropout, dWeights, signal, activities, feature_ids)
 
 			weights   = algo.Weights[0]
@@ -493,8 +491,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 					pdweights[p][q] = dw
 
 					// clear cache
-					dweights[p][q] = 0 
-					feature_ids[q] = 0
+					dweights[p][q] = 0
 				}
 			}
 
