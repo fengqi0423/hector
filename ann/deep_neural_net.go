@@ -372,6 +372,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 	var mv, ft float64 
 	L := len(algo.Weights)
 	total := int64(len(dataset.Samples))
+	report_count := int(total) / 100
 	previousdWeights := make([][][]float64, L)
 	dWeights := make([][][]float64, L)
 
@@ -526,7 +527,7 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 			}			
 
 			counter += int(algo.Params.Batch)
-			if algo.Params.Verbose > 0 && counter % (10*int(algo.Params.Batch)) == 0 {
+			if algo.Params.Verbose > 0 && (counter % report_count == 0) {
 				fmt.Printf("Epoch %d %f%%\n", epoch+1, float64(counter)/float64(total)*100)
 			}
 		}
