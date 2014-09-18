@@ -361,6 +361,16 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int, adws [][]
 				}
 			}
 		}
+
+		// clear activity buffer - it only stores hidden and output layer, so this should be fast
+		for i:=0; i<len(algo.Params.Hidden); i++ {
+			for j:=int64(0); j<=algo.Params.Hidden[i]; j++ {
+				activities[i][j] = 0
+			}
+		}
+		for j:=int64(0); j<algo.Params.Classes; j++ {
+			activities[L-1][j] = 0
+		}
 	}
 }
 
