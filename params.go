@@ -136,7 +136,7 @@ func PrepareParams() (string, string, string, string, map[string]string) {
 	momentum := flag.String("momentum", "0", "learning momentum")
 	batch := flag.String("batch-size", "1", "sgd batch size")
 	prob_of_class := flag.String("prob-of-class", "-1", "probability of which class should be output, instead of the winning class")
-	
+	activation := flag.String("activation", "2", "neural net activation 1 - sigmoid, 2 - tanh")
 
 	flag.Parse()
 	runtime.GOMAXPROCS(*core)
@@ -181,6 +181,7 @@ func PrepareParams() (string, string, string, string, map[string]string) {
 	params["momentum"] = *momentum
 	params["batch"] = *batch
 	params["prob-of-class"] = *prob_of_class
+	params["activation"] = *activation
 
 	fmt.Println(params)
 	return *train_path, *test_path, *pred_path, *method, params

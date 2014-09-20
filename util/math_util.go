@@ -5,6 +5,13 @@ import (
 	"strconv"
 )
 
+func Tanh(x float64)(y float64) {
+	e := math.Exp(x)
+	f := 1/e
+	y = (e-f)/(e+f)
+	return y
+}
+
 func Sigmoid(x float64)(y float64) {
 	y = 1 / (1 + math.Exp(-1 * x))
 	return y

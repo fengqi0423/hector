@@ -26,6 +26,7 @@ type DeepNetParams struct {
 	Verbose              int64
 	Dropout_rate_input   float64
 	Dropout_rate         float64
+	Activation           int64
 }
 
 type DeepNet struct {
@@ -153,10 +154,11 @@ func (algo *DeepNet) Init(params map[string]string) {
 	algo.Params.Dropout_rate_input, _   = strconv.ParseFloat(params["input-dropout-rate"], 64)
 	algo.Params.Momentum, _             = strconv.ParseFloat(params["momentum"], 64)
 
-	algo.Params.Classes, _ = strconv.ParseInt(params["classes"], 10, 32)
-	algo.Params.Epoches, _ = strconv.ParseInt(params["steps"], 10, 32)
-	algo.Params.Verbose, _ = strconv.ParseInt(params["verbose"], 10, 32)
-	algo.Params.Batch  , _ = strconv.ParseInt(params["batch"], 10, 32)
+	algo.Params.Classes   , _ = strconv.ParseInt(params["classes"], 10, 32)
+	algo.Params.Epoches   , _ = strconv.ParseInt(params["steps"], 10, 32)
+	algo.Params.Verbose   , _ = strconv.ParseInt(params["verbose"], 10, 32)
+	algo.Params.Batch     , _ = strconv.ParseInt(params["batch"], 10, 32)
+	algo.Params.Activation, _ = strconv.ParseInt(params["activation"], 10, 32)
 
 	hidden := strings.Split(params["hidden"], ",")
 	algo.Params.Hidden = make([]int64, len(hidden))
@@ -179,6 +181,26 @@ func (algo *DeepNet) Init(params map[string]string) {
 	algo.LoadedModel = false
 }
 
+func (algo *DeepNet) Activate(x float64) float64 {
+	switch {
+	case algo.Params.Activation == 1:
+		return util.Sigmoid(x)
+	case algo.Params.Activation == 2:
+		return util.Tanh(x)
+	}
+	return util.Sigmoid(x)
+}
+
+func (algo *DeepNet) DerivativeOfActivation(x float64) float64 {
+	switch {
+	case algo.Params.Activation == 1:
+		return 1 * (1-x)
+	case algo.Params.Activation == 2:
+		return 1 - x*x
+	}
+	return 1 * (1-x)
+}
+
 func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 	// Input layer -> first hidden layer
 	h := core.NewArrayVector()
@@ -188,7 +210,7 @@ func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 		for _, f := range sample.Features {
 			sum += f.Value * weights[i][f.Id]
 		}
-		h.SetValue(int(i), util.Sigmoid(sum))
+		h.SetValue(int(i), algo.Activate(sum))
 	}
 
 	var y *core.ArrayVector
@@ -210,7 +232,7 @@ func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 			for j := int64(0); j <= algo.Params.Hidden[l-1]; j++ {
 				sum += h.GetValue(int(j)) * weights[i][j]
 			}
-			y.SetValue(int(i), util.Sigmoid(sum))
+			y.SetValue(int(i), algo.Activate(sum))
 		}
 		h = y
 	}
@@ -235,7 +257,7 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 					sum += f.Value * weights[i][f.Id]
 				}
 			}
-			g[i] = util.Sigmoid(sum)
+			g[i] = algo.Activate(sum)
 		} else {
 			g[i] = 0
 		}
@@ -265,7 +287,7 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 						sum += h[j] * weights[i][j]
 					}
 				}
-				g[i] = util.Sigmoid(sum)
+				g[i] = algo.Activate(sum)
 			}
 		}
 	}
@@ -322,7 +344,7 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int, adws [][]
 				if droph[i] == 0 {
 					for j:=0; j<dg; j++{
 						if dropg[j] == 0 {
-							sum += dyg[j] * h[i] * (1-h[i]) * weights[j][i]
+							sum += dyg[j] * algo.DerivativeOfActivation(h[i]) * weights[j][i]
 						}
 					}
 					dyh[i] = sum
