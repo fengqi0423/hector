@@ -60,6 +60,7 @@ func TestClassifiersOnXOR(t *testing.T) {
 	params["dropout-rate"] = "0.5"
 	params["input-dropout-rate"] = "0.3"
 	params["activation"] = "2"
+	params["init-weight"] = "1"
 
 	for _, algo := range algos {
 		train_dataset := core.XORDataSet(1000)

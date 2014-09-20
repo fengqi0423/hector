@@ -27,6 +27,7 @@ type DeepNetParams struct {
 	Dropout_rate_input   float64
 	Dropout_rate         float64
 	Activation           int64
+	InitWeight           int64
 }
 
 type DeepNet struct {
@@ -36,11 +37,34 @@ type DeepNet struct {
 	ValidationSet  *core.DataSet
 }
 
-func (algo *DeepNet) RandomInitArray(input_dim int64) []float64 {
-	w := make([]float64, input_dim)
-	d := math.Sqrt(float64(input_dim))
-	for i:=int64(0); i < input_dim; i++ {
-		w[i] = (rand.Float64()-0.5)/d
+func (algo *DeepNet) RandomArray(lower float64, upper float64, size int64) []float64 {
+	// Generate an array of random numbers evenly sampled between lower and upper bound
+	a := make([]float64, size)
+	l := upper - lower
+	for i:=int64(0); i < size; i++ {
+		a[i] = lower + rand.Float64()*l
+	}
+	return a
+}
+
+func (algo *DeepNet) InitializeWeights(input_dim int64, output_dim int64) [][]float64 {
+	w := make([][]float64, output_dim)
+	lower := -1.0
+	upper := 1.0
+	switch {
+	case algo.Params.InitWeight == 0: 
+		upper = 1.0/math.Sqrt(float64(input_dim))
+		lower = -upper
+	case algo.Params.InitWeight == 1:  // normalized initialization Clorot and Bengio 2010
+		upper = math.Sqrt(6.0/float64(input_dim + output_dim))
+		lower = -upper
+	case algo.Params.InitWeight == 2: // my experience this works better with sigmoid activation
+		upper = 1.0/math.Sqrt(float64(output_dim))
+		lower = -upper
+	}
+
+	for i:=int64(0); i<output_dim; i++ {
+		w[i] = algo.RandomArray(lower, upper, input_dim)
 	}
 	return w
 }
@@ -159,6 +183,7 @@ func (algo *DeepNet) Init(params map[string]string) {
 	algo.Params.Verbose   , _ = strconv.ParseInt(params["verbose"], 10, 32)
 	algo.Params.Batch     , _ = strconv.ParseInt(params["batch"], 10, 32)
 	algo.Params.Activation, _ = strconv.ParseInt(params["activation"], 10, 32)
+	algo.Params.InitWeight, _ = strconv.ParseInt(params["init-weight"], 10, 32)
 
 	hidden := strings.Split(params["hidden"], ",")
 	algo.Params.Hidden = make([]int64, len(hidden))
@@ -436,9 +461,9 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 			previousdWeights[l] = make([][]float64, out_dim)
 			for i := int64(0); i < out_dim; i++ {
 				dWeights[l][i]         = make([]float64, in_dim+1)
-				algo.Weights[l][i]     = algo.RandomInitArray(in_dim+1)
 				previousdWeights[l][i] = make([]float64, in_dim+1)
 			}
+			algo.Weights[l] = algo.InitializeWeights(in_dim+1, out_dim)
 		}
 	}
 
