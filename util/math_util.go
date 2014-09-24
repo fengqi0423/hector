@@ -6,9 +6,8 @@ import (
 )
 
 func Tanh(x float64)(y float64) {
-	e := math.Exp(x)
-	f := 1/e
-	y = (e-f)/(e+f)
+	e := math.Exp(-2*x)
+	y = (1-e)/(1+e)
 	return y
 }
 
