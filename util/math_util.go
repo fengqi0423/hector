@@ -7,7 +7,7 @@ import (
 
 func Tanh(x float64)(y float64) {
 	if x < -100 {
-		y = 0.0
+		y = -1.0
 	} else if x > 100 {
 		y = 1.0
 	} else {
