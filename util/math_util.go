@@ -6,8 +6,14 @@ import (
 )
 
 func Tanh(x float64)(y float64) {
-	e := math.Exp(-2*x)
-	y = (1-e)/(1+e)
+	if x < 100 {
+		y = 0.0
+	} else if x > 100 {
+		y = 1.0
+	} else {
+		e := math.Exp(-2*x)
+		y = (1-e)/(1+e)
+	}
 	return y
 }
 
