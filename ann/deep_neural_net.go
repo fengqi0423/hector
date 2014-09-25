@@ -257,7 +257,11 @@ func (algo *DeepNet) PredictMultiClass(sample *core.Sample) *core.ArrayVector {
 			for j := int64(0); j <= algo.Params.Hidden[l-1]; j++ {
 				sum += h.GetValue(int(j)) * weights[i][j]
 			}
-			y.SetValue(int(i), algo.Activate(sum))
+			if l == L-1 {
+				y.SetValue(int(i), sum)
+			} else {
+				y.SetValue(int(i), algo.Activate(sum))
+			}
 		}
 		h = y
 	}
@@ -312,7 +316,11 @@ func (algo *DeepNet) PredictMultiClassWithDropout(sample *core.Sample, dropout [
 						sum += h[j] * weights[i][j]
 					}
 				}
-				g[i] = algo.Activate(sum)
+				if l == L - 1 {
+					g[i] = sum
+				} else {
+					g[i] = algo.Activate(sum)
+				}
 			}
 		}
 	}
