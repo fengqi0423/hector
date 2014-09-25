@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"bufio"
+	"runtime"
 )
 
 type DeepNetParams struct {
@@ -430,6 +431,7 @@ func (algo *DeepNet) GetDelta(samples []*core.Sample, dropout [][]int, adws [][]
 }
 
 func (algo *DeepNet) Train(dataset *core.DataSet) {
+	gc_period := 10000
 	var weights [][]float64
 	var dweights [][]float64
 	var pdweights [][]float64
@@ -594,6 +596,9 @@ func (algo *DeepNet) Train(dataset *core.DataSet) {
 			counter += int(algo.Params.Batch)
 			if algo.Params.Verbose > 0 && (counter % report_count == 0) {
 				fmt.Printf("Epoch %d %f%%\n", epoch+1, float64(counter)/float64(total)*100)
+			}
+			if counter % gc_period == 0 {
+				runtime.GC()
 			}
 		}
 
