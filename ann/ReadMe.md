@@ -6,35 +6,29 @@ Current status:
 
 	1. Method "ann" in neural_network.go is deprecated. This is the first version of two layer neural network I contributed to xlvector long time ago. I've probably messed up "ann" after recently forking it from xlvector's repo, since it no longer passes the XOR test. It differs from xlvector's version in that it supports hidden layer dropout.
 
-	2. Method "dnn" has replaced "ann". Its stable version is in branch "v1". It differs from ann in that it
+	2. Method "dnn" has replaced "ann". Its stable version is in branch "v2". It differs from ann in that it
 		- can be configured to have any number of layers
 		- supports dropout in both hidden and input layers
 		- supports momentum
 		- can output probabilities instead of diescrete labels
-
-	3. Method "dnn" in master branch is being actively developed (should have used a develop branch). It differs from the stable version in that 
+		- supports activation by Sigmoid and Tanh functions
+		- support normalized weight initialization (Clorot and Bengio 2010)
+		- support mini-batch
 		- all matrices and vectors are replaced by arrays (golang slices) to better control memory allocation (not fully successful yet)
-		- mini-batch is supported
-		- it initializes weights from a distribution of Gauss(0, 1/sqrt(NumOfInputNodes)). This turned out to be a bad decision for sigmoid activation, and needs to be fixed.
+		- fully use array to avoid map lookups, yet keep leveraging input sparsity (this is almost done - 20% speed up compared to v1 branch)
 
 TODOs for dnn
 
-	1. support different activation functions, tanh, softsign, rectifier, etc.
+	1. support pooling activation: rectifier and maxout.
 
-	2. switch to Glorot and Bengio's normalized initialization
+	2. fully reuse arrays to avoid memory allocation, or alternatively, figure out a way for better config GC or force GC.
 
-	3. fully reuse arrays to avoid memory allocation, or alternatively, figure out a way for better config GC (doesn't seem possible given current golang)
-
-	4. fully use array to avoid map lookups, yet keep leveraging input sparsity (this is almost done - 20% speed up compared to v1 branch)
-
-	5. think of a way to use goroutine and more CPU cores.
+	3. think of a way to use goroutine and more CPU cores.
 		a. committee and Bayesian neural networks
 		b. parallel processing for a mini-batch
 		c. parallel processing for forward and backward computations of neurons in the same layer (this failed to bring cpu usage to higher than 100% in "ann")
 
-	6. support autoencoder or RBM pre-training
-
-	7. support different cost functions
+	4. support autoencoder or RBM pre-training
 
 Setup:
 
@@ -69,7 +63,10 @@ Use neural network:
 		--train build/feature/feature5.trn1.sps.scale \
 		--test build/feature/feature5.val1.sps.scale \
 		--pred build/val1/dnn_20_10_0.1_0.95_0.5_0.3_0.0_0.5_feature5.val1.yht \
-		--validation build/feature/feature5.val1.sps.scale
+		--validation build/feature/feature5.val1.sps.scale \
+		--activation 2 \
+		--init-weight 1 \
+		--batch-size 5
 
 	Always use hector-mc-run, which means multi-class run.
 	Parameters (available in stable version):
@@ -89,3 +86,6 @@ Use neural network:
 		--test: testing data file
 		--validation: validation data file (only useful in verbose mode to evaluate AUC during training)
 		--pred: prediction output file
+		--activation: 1 - sigmoid, 2 - tanh
+		--init-weight: 0 - common method, 1 - normalized initialization
+		--batch-size: mini-batch size
